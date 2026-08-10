@@ -32,11 +32,11 @@ apps/
   web/       # future PWA
   worker/    # future catalog and price synchronization
 packages/
-  eshop/     # regional adapter boundary and validation
-  shared/    # catalog, price, and shared domain contracts
+  eshop/     # regional adapter interface, errors, and output validation
+  shared/    # normalized domain schemas/contracts and price derivations
 ```
 
-`packages/shared` defines normalized catalog and price data. `packages/eshop` validates adapter output and keeps the regional data-source interface separate from future storage, API, and client code.
+`packages/shared` provides normalized catalog and price schemas/contracts, plus price derivations. `packages/eshop` provides the regional adapter interface/boundary, typed upstream errors, and output validation while remaining separate from future storage, API, and client code.
 
 ## Design
 
