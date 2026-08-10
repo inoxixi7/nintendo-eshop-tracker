@@ -46,37 +46,70 @@ describe('CatalogItemSchema', () => {
     expect(() => CatalogItemSchema.parse({ ...validCatalogItem, sourceId: '' })).toThrow();
   });
 
-  it('rejects a relative image URL', () => {
-    expect(() => CatalogItemSchema.parse({ ...validCatalogItem, imageUrl: '/game.jpg' })).toThrow();
-  });
-
   it.each([
     ['undefined', undefined],
     ['Date', new Date('2026-08-10T00:00:00.000Z')],
     ['bigint', 1n],
-    ['function', () => undefined]
+    ['symbol', Symbol('invalid')],
+    ['function', () => undefined],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY]
   ])('rejects %s values in source payloads', (_name, value) => {
-    expect(() => CatalogItemSchema.parse({
+    expect(CatalogItemSchema.safeParse({
       ...validCatalogItem,
       sourcePayload: { invalid: value }
-    })).toThrow();
+    }).success).toBe(false);
   });
 
   it('rejects a cyclic source payload', () => {
     const cyclic: { self?: unknown } = {};
     cyclic.self = cyclic;
 
-    expect(() => CatalogItemSchema.parse({ ...validCatalogItem, sourcePayload: cyclic })).toThrow();
+    expect(CatalogItemSchema.safeParse({ ...validCatalogItem, sourcePayload: cyclic }).success).toBe(false);
   });
 
   it.each([
+    ['array', []],
+    ['Date', new Date('2026-08-10T00:00:00.000Z')],
+    ['class instance', new (class Payload {})()]
+  ])('rejects a non-plain-object source payload root: %s', (_name, sourcePayload) => {
+    expect(CatalogItemSchema.safeParse({ ...validCatalogItem, sourcePayload }).success).toBe(false);
+  });
+
+  it('accepts a shared non-cyclic object in sibling source payload properties', () => {
+    const shared = { nested: 'value' };
+
+    expect(CatalogItemSchema.safeParse({
+      ...validCatalogItem,
+      sourcePayload: { first: shared, second: shared }
+    }).success).toBe(true);
+  });
+
+  it('accepts deeply nested JSON source payloads without overflowing', () => {
+    const sourcePayload: Record<string, unknown> = {};
+    let current = sourcePayload;
+
+    for (let depth = 0; depth < 10_000; depth += 1) {
+      const next: Record<string, unknown> = {};
+      current.child = next;
+      current = next;
+    }
+
+    expect(CatalogItemSchema.safeParse({ ...validCatalogItem, sourcePayload }).success).toBe(true);
+  });
+
+  it.each([
+    ['imageUrl', '/game.jpg'],
+    ['imageUrl', 'not a url'],
     ['imageUrl', 'javascript:alert(1)'],
     ['imageUrl', 'data:text/plain,hello'],
     ['imageUrl', 'ftp://example.com/game.jpg'],
+    ['sourceUrl', '/game'],
+    ['sourceUrl', 'not a url'],
     ['sourceUrl', 'javascript:alert(1)'],
     ['sourceUrl', 'data:text/plain,hello'],
     ['sourceUrl', 'ftp://example.com/game']
-  ] as const)('rejects %s with an unsafe scheme: %s', (field, url) => {
-    expect(() => CatalogItemSchema.parse({ ...validCatalogItem, [field]: url })).toThrow();
+  ] as const)('safely rejects invalid %s: %s', (field, url) => {
+    expect(CatalogItemSchema.safeParse({ ...validCatalogItem, [field]: url }).success).toBe(false);
   });
 });
