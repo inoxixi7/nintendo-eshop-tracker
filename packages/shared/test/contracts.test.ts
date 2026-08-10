@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   CatalogItemSchema,
   CountryCodeSchema,
-  CurrencyCodeSchema
+  CurrencyCodeSchema,
+  PriceObservationSchema
 } from '../src/index.js';
 
 const validCatalogItem = {
@@ -19,6 +20,19 @@ const validCatalogItem = {
   productType: 'game',
   sourceUrl: 'https://example.com/game',
   sourcePayload: { originalTitle: 'Sample Game' }
+};
+
+const validPriceObservation = {
+  country: 'US',
+  source: 'nintendo-price-api',
+  sourceId: '70010000000185',
+  currency: 'USD',
+  regularAmountMinor: 3999,
+  discountAmountMinor: 2999,
+  discountStartAt: '2026-08-01T00:00:00.000Z',
+  discountEndAt: '2026-08-15T23:59:59.000Z',
+  salesStatus: 'onsale',
+  observedAt: '2026-08-10T06:00:00.000Z'
 };
 
 describe('CountryCodeSchema', () => {
@@ -111,5 +125,60 @@ describe('CatalogItemSchema', () => {
     ['sourceUrl', 'ftp://example.com/game']
   ] as const)('safely rejects invalid %s: %s', (field, url) => {
     expect(CatalogItemSchema.safeParse({ ...validCatalogItem, [field]: url }).success).toBe(false);
+  });
+});
+
+describe('PriceObservationSchema', () => {
+  it('accepts a valid price observation', () => {
+    expect(PriceObservationSchema.parse(validPriceObservation)).toEqual(validPriceObservation);
+  });
+
+  it('rejects floating-point minor-unit amounts', () => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      regularAmountMinor: 39.99
+    }).success).toBe(false);
+  });
+
+  it('rejects discounts higher than the regular amount', () => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      discountAmountMinor: 4999
+    }).success).toBe(false);
+  });
+
+  it('rejects discount end times that are not later than start times', () => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      discountEndAt: validPriceObservation.discountStartAt
+    }).success).toBe(false);
+  });
+
+  it.each([
+    ['discountStartAt', '2026-08-01'],
+    ['discountEndAt', 'not-a-date'],
+    ['observedAt', '2026-08-10T06:00:00']
+  ] as const)('safely rejects invalid %s datetimes', (field, value) => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      [field]: value
+    }).success).toBe(false);
+  });
+
+  it('accepts null optional discount fields', () => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      discountAmountMinor: null,
+      discountStartAt: null,
+      discountEndAt: null
+    }).success).toBe(true);
+  });
+
+  it('accepts zero-value amounts at the boundary', () => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      regularAmountMinor: 0,
+      discountAmountMinor: 0
+    }).success).toBe(true);
   });
 });

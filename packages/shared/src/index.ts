@@ -10,3 +10,7 @@ export {
   type CatalogItem,
   type ProductType
 } from './catalog-item.js';
+export {
+  PriceObservationSchema,
+  type PriceObservation
+} from './price-observation.js';
