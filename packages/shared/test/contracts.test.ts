@@ -134,10 +134,19 @@ describe('PriceObservationSchema', () => {
   });
 
   it('rejects floating-point minor-unit amounts', () => {
-    expect(PriceObservationSchema.safeParse({
+    const result = PriceObservationSchema.safeParse({
       ...validPriceObservation,
-      regularAmountMinor: 39.99
-    }).success).toBe(false);
+      regularAmountMinor: 39.99,
+      discountAmountMinor: null
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(expect.objectContaining({
+        path: ['regularAmountMinor'],
+        code: 'invalid_type'
+      }));
+    }
   });
 
   it('rejects discounts higher than the regular amount', () => {
@@ -165,6 +174,33 @@ describe('PriceObservationSchema', () => {
     }).success).toBe(false);
   });
 
+  it.each([
+    ['no fractional seconds', '2026-08-10T06:00:00Z'],
+    ['one fractional digit', '2026-08-10T06:00:00.1Z'],
+    ['two fractional digits', '2026-08-10T06:00:00.12Z'],
+    ['three fractional digits with an offset', '2026-08-10T15:00:00.123+09:00']
+  ])('accepts datetimes with %s', (_name, observedAt) => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      observedAt
+    }).success).toBe(true);
+  });
+
+  it('rejects datetime precision finer than milliseconds', () => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      observedAt: '2026-08-10T06:00:00.0001Z'
+    }).success).toBe(false);
+  });
+
+  it('compares valid millisecond-precision discount timestamps accurately', () => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      discountStartAt: '2026-08-01T00:00:00.001Z',
+      discountEndAt: '2026-08-01T00:00:00.002Z'
+    }).success).toBe(true);
+  });
+
   it('accepts null optional discount fields', () => {
     expect(PriceObservationSchema.safeParse({
       ...validPriceObservation,
@@ -180,5 +216,73 @@ describe('PriceObservationSchema', () => {
       regularAmountMinor: 0,
       discountAmountMinor: 0
     }).success).toBe(true);
+  });
+
+  it('accepts Number.MAX_SAFE_INTEGER amounts at the boundary', () => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      regularAmountMinor: Number.MAX_SAFE_INTEGER,
+      discountAmountMinor: Number.MAX_SAFE_INTEGER
+    }).success).toBe(true);
+  });
+
+  it.each([
+    ['negative', -1],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['an unsafe integer', Number.MAX_SAFE_INTEGER + 1]
+  ])('safely rejects %s amounts', (_name, regularAmountMinor) => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      regularAmountMinor,
+      discountAmountMinor: null
+    }).success).toBe(false);
+  });
+
+  it('does not add a discount relationship issue when the regular amount is invalid', () => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      regularAmountMinor: -1,
+      discountAmountMinor: 0
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).not.toContainEqual([
+        'discountAmountMinor'
+      ]);
+    }
+  });
+
+  it('does not add a time relationship issue when the start datetime is malformed', () => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      discountStartAt: 'not-a-date',
+      discountEndAt: '2026-07-01T00:00:00.000Z'
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).not.toContainEqual([
+        'discountEndAt'
+      ]);
+    }
+  });
+
+  it('finds valid-field relationships despite an unrelated invalid field', () => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      salesStatus: '',
+      discountAmountMinor: 4999,
+      discountEndAt: validPriceObservation.discountStartAt
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).toEqual(expect.arrayContaining([
+        ['discountAmountMinor'],
+        ['discountEndAt']
+      ]));
+    }
   });
 });
