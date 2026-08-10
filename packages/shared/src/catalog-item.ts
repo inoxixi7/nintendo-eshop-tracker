@@ -19,14 +19,14 @@ function isPlainObject(value: object): value is Record<string, unknown> {
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
-  if (typeof value !== 'object' || value === null || !isPlainObject(value)) {
-    return false;
-  }
-
-  const ancestors = new Set<object>();
-  const stack: TraversalEntry[] = [{ kind: 'enter', value }];
-
   try {
+    if (typeof value !== 'object' || value === null || !isPlainObject(value)) {
+      return false;
+    }
+
+    const ancestors = new Set<object>();
+    const stack: TraversalEntry[] = [{ kind: 'enter', value }];
+
     while (stack.length > 0) {
       const entry = stack.pop();
 

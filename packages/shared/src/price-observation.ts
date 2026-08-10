@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { CountryCodeSchema, CurrencyCodeSchema } from './country.js';
 
 const IsoDateTimeSchema = z.string()
-  .datetime({ offset: true })
+  .datetime({ offset: false })
   .refine((value) => {
     const fractionalSeconds = value.match(/\.(\d+)/)?.[1];
     return fractionalSeconds === undefined || fractionalSeconds.length <= 3;
@@ -23,6 +23,16 @@ const DiscountTimeRangeSchema = z.object({
   discountStartAt: IsoDateTimeSchema.nullable(),
   discountEndAt: IsoDateTimeSchema.nullable()
 });
+const CountryCurrencyPairSchema = z.object({
+  country: CountryCodeSchema,
+  currency: CurrencyCodeSchema
+});
+
+const currencyByCountry = {
+  JP: 'JPY',
+  US: 'USD',
+  GB: 'GBP'
+} as const;
 
 function toTimestamp(value: string): number | null {
   try {
@@ -47,6 +57,13 @@ const PriceObservationBaseSchema = z.object({
 });
 
 export const PriceObservationSchema = PriceObservationBaseSchema
+  .refine((value) => value.currency === currencyByCountry[value.country], {
+    path: ['currency'],
+    message: 'currency must match country',
+    when(payload) {
+      return CountryCurrencyPairSchema.safeParse(payload.value).success;
+    }
+  })
   .refine((value) => (
     value.discountAmountMinor === null ||
     value.discountAmountMinor <= value.regularAmountMinor

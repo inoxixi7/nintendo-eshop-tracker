@@ -90,6 +90,26 @@ describe('CatalogItemSchema', () => {
     expect(CatalogItemSchema.safeParse({ ...validCatalogItem, sourcePayload }).success).toBe(false);
   });
 
+  it.each([
+    ['getPrototypeOf', new Proxy({}, { getPrototypeOf() { throw new Error('blocked'); } })],
+    ['ownKeys', new Proxy({}, { ownKeys() { throw new Error('blocked'); } })],
+    ['get', new Proxy({ nested: 'value' }, { get() { throw new Error('blocked'); } })],
+    ['revoked', (() => { const { proxy, revoke } = Proxy.revocable({}, {}); revoke(); return proxy; })()]
+  ])('safely rejects source payload roots with a throwing %s trap', (_name, sourcePayload) => {
+    const result = CatalogItemSchema.safeParse({ ...validCatalogItem, sourcePayload });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('safely rejects a nested source payload proxy with a throwing trap', () => {
+    const sourcePayload = {
+      nested: new Proxy({}, { ownKeys() { throw new Error('blocked'); } })
+    };
+    const result = CatalogItemSchema.safeParse({ ...validCatalogItem, sourcePayload });
+
+    expect(result.success).toBe(false);
+  });
+
   it('accepts a shared non-cyclic object in sibling source payload properties', () => {
     const shared = { nested: 'value' };
 
@@ -131,6 +151,72 @@ describe('CatalogItemSchema', () => {
 describe('PriceObservationSchema', () => {
   it('accepts a valid price observation', () => {
     expect(PriceObservationSchema.parse(validPriceObservation)).toEqual(validPriceObservation);
+  });
+
+  it.each([
+    ['JP', 'JPY'],
+    ['US', 'USD'],
+    ['GB', 'GBP']
+  ] as const)('accepts the %s and %s currency relationship', (country, currency) => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      country,
+      currency
+    }).success).toBe(true);
+  });
+
+  it.each([
+    ['JP', 'USD'],
+    ['US', 'GBP'],
+    ['GB', 'JPY']
+  ] as const)('rejects the %s and %s currency mismatch at currency', (country, currency) => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      country,
+      currency
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(expect.objectContaining({
+        path: ['currency'],
+        message: 'currency must match country'
+      }));
+    }
+  });
+
+  it('finds a country and currency mismatch despite an unrelated aborting field', () => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      source: 123,
+      currency: 'GBP'
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(expect.objectContaining({
+        path: ['currency'],
+        message: 'currency must match country'
+      }));
+    }
+  });
+
+  it.each([
+    ['country', 'DE', 'JPY'],
+    ['currency', 'JP', 'EUR']
+  ] as const)('does not add a currency relationship issue when %s is invalid', (_field, country, currency) => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      country,
+      currency
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).not.toContainEqual(expect.objectContaining({
+        message: 'currency must match country'
+      }));
+    }
   });
 
   it('rejects floating-point minor-unit amounts', () => {
@@ -178,12 +264,23 @@ describe('PriceObservationSchema', () => {
     ['no fractional seconds', '2026-08-10T06:00:00Z'],
     ['one fractional digit', '2026-08-10T06:00:00.1Z'],
     ['two fractional digits', '2026-08-10T06:00:00.12Z'],
-    ['three fractional digits with an offset', '2026-08-10T15:00:00.123+09:00']
+    ['three fractional digits', '2026-08-10T06:00:00.123Z']
   ])('accepts datetimes with %s', (_name, observedAt) => {
     expect(PriceObservationSchema.safeParse({
       ...validPriceObservation,
       observedAt
     }).success).toBe(true);
+  });
+
+  it.each([
+    ['discountStartAt', '2026-08-10T15:00:00.123+09:00'],
+    ['discountEndAt', '2026-08-10T01:00:00.123-05:00'],
+    ['observedAt', '2026-08-10T15:00:00.123+09:00']
+  ] as const)('safely rejects non-UTC offsets for %s', (field, value) => {
+    expect(PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      [field]: value
+    }).success).toBe(false);
   });
 
   it('rejects datetime precision finer than milliseconds', () => {

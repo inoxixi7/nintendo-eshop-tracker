@@ -44,7 +44,7 @@ describe('batch validation', () => {
   it('parses and normalizes valid catalog items', () => {
     const batch = [catalogItem()];
 
-    expect(validateCatalogBatch(batch)).toEqual([
+    expect(validateCatalogBatch(batch, 'JP')).toEqual([
       expect.objectContaining({
         source: 'Nintendo eShop',
         sourceId: 'game-1',
@@ -58,7 +58,7 @@ describe('batch validation', () => {
   it('parses and normalizes valid price observations', () => {
     const batch = [priceObservation()];
 
-    expect(validatePriceBatch(batch)).toEqual([
+    expect(validatePriceBatch(batch, 'JP')).toEqual([
       expect.objectContaining({
         source: 'Nintendo eShop',
         sourceId: 'game-1',
@@ -71,7 +71,7 @@ describe('batch validation', () => {
     ['catalog', validateCatalogBatch],
     ['price', validatePriceBatch]
   ] as const)('returns an empty %s batch unchanged', (_name, validate) => {
-    expect(validate([])).toEqual([]);
+    expect(validate([], 'JP')).toEqual([]);
   });
 
   it.each([
@@ -79,7 +79,7 @@ describe('batch validation', () => {
     ['price', validatePriceBatch]
   ] as const)('rejects a non-array %s batch with a ZodError', (_name, validate) => {
     try {
-      validate({});
+      validate({}, 'JP');
       throw new Error('expected validation to throw');
     } catch (error) {
       expect(error).toBeInstanceOf(ZodError);
@@ -88,7 +88,7 @@ describe('batch validation', () => {
 
   it('rejects the whole catalog batch and keeps the invalid item index and field in its ZodError', () => {
     try {
-      validateCatalogBatch([catalogItem(), catalogItem({ title: '   ' })]);
+      validateCatalogBatch([catalogItem(), catalogItem({ title: '   ' })], 'JP');
       throw new Error('expected validation to throw');
     } catch (error) {
       expect(error).toBeInstanceOf(ZodError);
@@ -100,7 +100,7 @@ describe('batch validation', () => {
 
   it('rejects the whole price batch and keeps the invalid item index and field in its ZodError', () => {
     try {
-      validatePriceBatch([priceObservation(), priceObservation({ salesStatus: '   ' })]);
+      validatePriceBatch([priceObservation(), priceObservation({ salesStatus: '   ' })], 'JP');
       throw new Error('expected validation to throw');
     } catch (error) {
       expect(error).toBeInstanceOf(ZodError);
@@ -117,7 +117,7 @@ describe('batch validation', () => {
     const batch = [item];
     const before = structuredClone(batch);
 
-    validate(batch);
+    validate(batch, 'JP');
 
     expect(batch).toEqual(before);
   });
@@ -127,7 +127,7 @@ describe('batch validation', () => {
     ['non-JSON source payload', catalogItem({ sourcePayload: { date: new Date() } }), [0, 'sourcePayload']]
   ] as const)('enforces catalog %s rules within a batch', (_name, item, path) => {
     try {
-      validateCatalogBatch([item]);
+      validateCatalogBatch([item], 'JP');
       throw new Error('expected validation to throw');
     } catch (error) {
       expect(error).toBeInstanceOf(ZodError);
@@ -139,12 +139,43 @@ describe('batch validation', () => {
 
   it('enforces price cross-field rules within a batch', () => {
     try {
-      validatePriceBatch([priceObservation({ discountAmountMinor: 6001 })]);
+      validatePriceBatch([priceObservation({ discountAmountMinor: 6001 })], 'JP');
       throw new Error('expected validation to throw');
     } catch (error) {
       expect(error).toBeInstanceOf(ZodError);
       expect((error as ZodError).issues).toEqual(expect.arrayContaining([
         expect.objectContaining({ path: [0, 'discountAmountMinor'] })
+      ]));
+    }
+  });
+
+  it.each([
+    ['catalog', validateCatalogBatch, catalogItem],
+    ['price', validatePriceBatch, priceObservation]
+  ] as const)('rejects a single %s item from an unexpected country at its country path', (_name, validate, item) => {
+    try {
+      validate([item({ country: 'US' })], 'JP');
+      throw new Error('expected validation to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ZodError);
+      expect((error as ZodError).issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: [0, 'country'] })
+      ]));
+    }
+  });
+
+  it.each([
+    ['catalog', validateCatalogBatch, catalogItem],
+    ['price', validatePriceBatch, priceObservation]
+  ] as const)('rejects a mixed-country %s batch at each mismatched country path', (_name, validate, item) => {
+    try {
+      validate([item(), item({ country: 'US' }), item({ country: 'GB' })], 'JP');
+      throw new Error('expected validation to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ZodError);
+      expect((error as ZodError).issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: [1, 'country'] }),
+        expect.objectContaining({ path: [2, 'country'] })
       ]));
     }
   });
