@@ -229,14 +229,28 @@ describe('PriceObservationSchema', () => {
   it.each([
     ['negative', -1],
     ['NaN', Number.NaN],
-    ['Infinity', Number.POSITIVE_INFINITY],
-    ['an unsafe integer', Number.MAX_SAFE_INTEGER + 1]
+    ['Infinity', Number.POSITIVE_INFINITY]
   ])('safely rejects %s amounts', (_name, regularAmountMinor) => {
     expect(PriceObservationSchema.safeParse({
       ...validPriceObservation,
       regularAmountMinor,
       discountAmountMinor: null
     }).success).toBe(false);
+  });
+
+  it('rejects an unsafe integer with one regular amount issue', () => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      regularAmountMinor: Number.MAX_SAFE_INTEGER + 1,
+      discountAmountMinor: null
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.filter((issue) => (
+        issue.path.length === 1 && issue.path[0] === 'regularAmountMinor'
+      ))).toHaveLength(1);
+    }
   });
 
   it('does not add a discount relationship issue when the regular amount is invalid', () => {
@@ -283,6 +297,42 @@ describe('PriceObservationSchema', () => {
         ['discountAmountMinor'],
         ['discountEndAt']
       ]));
+    }
+  });
+
+  it.each([
+    ['country', 123],
+    ['salesStatus', 123]
+  ] as const)('finds discount relationships with an aborting invalid %s field', (field, value) => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      [field]: value,
+      discountAmountMinor: 4999
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).toContainEqual([
+        'discountAmountMinor'
+      ]);
+    }
+  });
+
+  it.each([
+    ['country', 123],
+    ['salesStatus', 123]
+  ] as const)('finds time relationships with an aborting invalid %s field', (field, value) => {
+    const result = PriceObservationSchema.safeParse({
+      ...validPriceObservation,
+      [field]: value,
+      discountEndAt: validPriceObservation.discountStartAt
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).toContainEqual([
+        'discountEndAt'
+      ]);
     }
   });
 });

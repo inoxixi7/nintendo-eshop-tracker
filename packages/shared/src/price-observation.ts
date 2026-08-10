@@ -12,8 +12,7 @@ const IsoDateTimeSchema = z.string()
 
 const MinorAmountSchema = z.number()
   .int()
-  .nonnegative()
-  .max(Number.MAX_SAFE_INTEGER);
+  .nonnegative();
 const NullableMinorAmountSchema = MinorAmountSchema.nullable();
 
 const DiscountAmountPairSchema = z.object({
@@ -34,7 +33,7 @@ function toTimestamp(value: string): number | null {
   }
 }
 
-export const PriceObservationSchema = z.object({
+const PriceObservationBaseSchema = z.object({
   country: CountryCodeSchema,
   source: z.string().trim().min(1),
   sourceId: z.string().trim().min(1),
@@ -45,38 +44,38 @@ export const PriceObservationSchema = z.object({
   discountEndAt: IsoDateTimeSchema.nullable(),
   salesStatus: z.string().trim().min(1),
   observedAt: IsoDateTimeSchema
-}).superRefine((value, context) => {
-  if (DiscountAmountPairSchema.safeParse(value).success &&
-    value.discountAmountMinor !== null &&
-    value.discountAmountMinor > value.regularAmountMinor
-  ) {
-    context.addIssue({
-      code: 'custom',
-      path: ['discountAmountMinor'],
-      message: 'discountAmountMinor cannot exceed regularAmountMinor'
-    });
-  }
+});
 
-  if (
-    DiscountTimeRangeSchema.safeParse(value).success &&
-    value.discountStartAt !== null &&
-    value.discountEndAt !== null
-  ) {
+export const PriceObservationSchema = PriceObservationBaseSchema
+  .refine((value) => (
+    value.discountAmountMinor === null ||
+    value.discountAmountMinor <= value.regularAmountMinor
+  ), {
+    path: ['discountAmountMinor'],
+    message: 'discountAmountMinor cannot exceed regularAmountMinor',
+    when(payload) {
+      return DiscountAmountPairSchema.safeParse(payload.value).success;
+    }
+  })
+  .refine((value) => {
+    if (value.discountStartAt === null || value.discountEndAt === null) {
+      return true;
+    }
+
     const discountStartAt = toTimestamp(value.discountStartAt);
     const discountEndAt = toTimestamp(value.discountEndAt);
 
-    if (
-      discountStartAt !== null &&
-      discountEndAt !== null &&
-      discountEndAt <= discountStartAt
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['discountEndAt'],
-        message: 'discountEndAt must be later than discountStartAt'
-      });
+    return (
+      discountStartAt === null ||
+      discountEndAt === null ||
+      discountEndAt > discountStartAt
+    );
+  }, {
+    path: ['discountEndAt'],
+    message: 'discountEndAt must be later than discountStartAt',
+    when(payload) {
+      return DiscountTimeRangeSchema.safeParse(payload.value).success;
     }
-  }
-});
+  });
 
 export type PriceObservation = z.infer<typeof PriceObservationSchema>;
