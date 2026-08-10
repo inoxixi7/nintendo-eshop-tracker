@@ -6,16 +6,30 @@ export type EshopErrorCode =
   | 'INVALID_PAYLOAD'
   | 'UNSUPPORTED_COUNTRY';
 
-interface EshopErrorOptions {
-  code: EshopErrorCode;
+interface EshopErrorOptionsBase {
   message: string;
   country: CountryCode;
   cause?: unknown;
 }
 
+interface UpstreamHttpEshopErrorOptions extends EshopErrorOptionsBase {
+  code: 'UPSTREAM_HTTP';
+  status: number;
+}
+
+interface NonHttpEshopErrorOptions extends EshopErrorOptionsBase {
+  code: Exclude<EshopErrorCode, 'UPSTREAM_HTTP'>;
+  status?: never;
+}
+
+export type EshopErrorOptions =
+  | UpstreamHttpEshopErrorOptions
+  | NonHttpEshopErrorOptions;
+
 export class EshopError extends Error {
   readonly code: EshopErrorCode;
   readonly country: CountryCode;
+  declare readonly status?: number;
 
   constructor(options: EshopErrorOptions) {
     if (options.cause === undefined) {
@@ -27,5 +41,9 @@ export class EshopError extends Error {
     this.name = 'EshopError';
     this.code = options.code;
     this.country = options.country;
+
+    if (options.code === 'UPSTREAM_HTTP') {
+      this.status = options.status;
+    }
   }
 }
