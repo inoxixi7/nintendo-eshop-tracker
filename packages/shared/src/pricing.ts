@@ -25,5 +25,14 @@ export function calculateDiscountPercent(price: PriceObservation): number | null
     return null;
   }
 
-  return Math.round((1 - discountAmountMinor / price.regularAmountMinor) * 100);
+  const numerator = BigInt(price.regularAmountMinor - discountAmountMinor) * 100n;
+  const denominator = BigInt(price.regularAmountMinor);
+  let percent = numerator / denominator;
+  const remainder = numerator % denominator;
+
+  if (remainder * 2n >= denominator) {
+    percent += 1n;
+  }
+
+  return Number(percent);
 }

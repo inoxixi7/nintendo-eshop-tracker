@@ -63,6 +63,18 @@ describe('pricing derivations', () => {
     expect(calculateDiscountPercent(price({ regularAmountMinor: 400, discountAmountMinor: 298 }))).toBe(26);
   });
 
+  it('rounds an exactly half discount percentage upward', () => {
+    expect(calculateDiscountPercent(price({ regularAmountMinor: 40, discountAmountMinor: 17 }))).toBe(58);
+  });
+
+  it('rounds a near-safe-integer price exactly', () => {
+    const regularAmountMinor = 9_007_199_254_740_800;
+    const discountAmountMinor = 4_458_563_631_096_696;
+
+    // The exact savings ratio is 101 / 200, so 50.5% rounds to 51%.
+    expect(calculateDiscountPercent(price({ regularAmountMinor, discountAmountMinor }))).toBe(51);
+  });
+
   it('reports a zero discounted amount as 100 percent off', () => {
     const observation = price({ discountAmountMinor: 0 });
 
