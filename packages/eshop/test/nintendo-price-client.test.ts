@@ -118,8 +118,8 @@ describe('NintendoPriceClient input and requests', () => {
     ['nondecimal', '70010000000abc'],
     ['plus sign', '+7001000000001'],
     ['minus sign', '-0010000000001'],
-    ['leading whitespace', ' 7001000000001'],
-    ['trailing whitespace', '7001000000001 '],
+    ['leading whitespace', ' 70010000000001'],
+    ['trailing whitespace', '70010000000001 '],
     ['query text', '70010000000001?x'],
     ['path text', '70010000000001/x'],
     ['leading zero', '00000000000001'],
@@ -138,11 +138,27 @@ describe('NintendoPriceClient input and requests', () => {
 
     expectInvalidPayloadCause(
       error,
-      'Nintendo price source ID must be a 14-digit integer'
+      'Nintendo source ID must be a canonical 14-digit integer'
     );
     expect(fetch).not.toHaveBeenCalled();
     expect(now).not.toHaveBeenCalled();
   });
+
+  it.each(['10000000000000', '99999999999999'])(
+    'accepts canonical boundary source ID %s',
+    async (canonicalSourceId) => {
+      const { client, fetch } = clientForPayload(priceResponse([
+        availablePrice(canonicalSourceId)
+      ]));
+
+      const result = await client.fetchPrices([canonicalSourceId]);
+
+      expect(result.observations.map((item) => item.sourceId)).toEqual([
+        canonicalSourceId
+      ]);
+      expect(fetch).toHaveBeenCalledOnce();
+    }
+  );
 
   it('deduplicates in first-seen order without mutating the caller array', async () => {
     const first = sourceId(1);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NintendoSourceIdSchema } from '../nintendo-source-id.js';
 
 const NullableTrimmedString = z.string().trim().nullable().optional();
 const ImageHashSchema = z.string()
@@ -9,7 +10,7 @@ const ImageHashSchema = z.string()
 
 export const JapanCatalogItemSchema = z.object({
   id: z.string().trim().min(1),
-  nsuid: z.string().trim().regex(/^\d{14}$/),
+  nsuid: NintendoSourceIdSchema,
   title: z.string().trim().min(1),
   icode: NullableTrimmedString,
   maker: NullableTrimmedString,

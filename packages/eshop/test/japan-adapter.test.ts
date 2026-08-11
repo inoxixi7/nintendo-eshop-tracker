@@ -159,7 +159,41 @@ describe('createJapanEshopAdapter', () => {
     expect(catalogCalls).toHaveLength(2);
     expect(catalogCalls.every(([, init]) => init?.signal === catalogSignal)).toBe(true);
     expect(priceCalls).toHaveLength(1);
+    expect((priceCalls[0]?.[0] as URL).searchParams.get('ids')).toBe(
+      sourceIdsBefore.join(',')
+    );
     expect(priceCalls[0]?.[1]?.signal).toBe(priceSignal);
+  });
+
+  it('rejects a leading-zero catalog NSUID before it can become a price request', async () => {
+    const fetch = vi.fn<FetchLike>(async (input) => {
+      const url = input as URL;
+
+      if (url.hostname === 'search.nintendo.jp') {
+        return jsonResponse({
+          status: 0,
+          result: {
+            total: 1,
+            items: [catalogItem('00000000000001', 'Invalid source ID')]
+          }
+        });
+      }
+
+      throw new Error(`unexpected price request: ${url.toString()}`);
+    });
+    const adapter = createJapanEshopAdapter({
+      fetch,
+      now: () => new Date(OBSERVED_AT)
+    });
+
+    await expect(adapter.fetchCatalog()).rejects.toMatchObject({
+      code: 'INVALID_PAYLOAD',
+      country: 'JP'
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls.every(([input]) => (
+      (input as URL).hostname !== 'api.ec.nintendo.com'
+    ))).toBe(true);
   });
 
   it('keeps separately configured adapter instances isolated', async () => {

@@ -104,7 +104,7 @@ Network transport and time are injected through narrow options (`fetch` and `now
 7. Normalize every trackable occurrence whose NSUID is non-null, retaining the first normalized item for each NSUID. An explicit `nsuid: null` row counts toward directory completeness but produces no `CatalogItem`.
 8. Stop only when the unique directory ID count equals the reported total, then run `validateCatalogBatch(result, 'JP')` before returning.
 
-The returned `CatalogItem` count can be lower than `result.total` because the directory total includes search-only rows without an NSUID. Directory identity and output identity remain separate: pagination is complete by unique directory ID, while output is deduplicated by first-seen NSUID.
+The returned `CatalogItem` count can be lower than `result.total` because the directory total includes search-only rows without an NSUID. Directory identity and output identity remain separate: pagination is complete by unique directory ID, while output is deduplicated by first-seen NSUID. A price-addressable identity is a canonical 14-digit non-zero-leading decimal NSUID with no normalization.
 
 The method never returns a partial catalog. If the upstream catalog changes during a crawl and the totals or unique directory count no longer agree, or a page repeats or makes no directory progress, it throws `INVALID_PAYLOAD`; a later Worker retry starts a fresh run.
 
@@ -162,7 +162,7 @@ Result behavior:
 
 `fetchPrices(sourceIds, signal?)` performs these steps:
 
-1. Validate and deduplicate the requested NSUID strings while preserving first-seen order.
+1. Validate each requested NSUID as a canonical 14-digit non-zero-leading decimal string with no normalization, then deduplicate while preserving first-seen order.
 2. Return two empty arrays without a network request when the input is empty.
 3. Capture one UTC `observedAt` value for the entire method call.
 4. Split IDs into batches of at most 50.
@@ -198,7 +198,7 @@ Fixed, reduced fixtures cover:
 - a normal price, discounted price, unreleased price, and `not_found` result;
 - localized display strings that prove only `raw_value` is parsed;
 - additive unknown fields;
-- malformed identity, dates, currency, decimals, and response envelopes.
+- non-canonical NSUIDs, including leading-zero and whitespace-bearing strings, plus malformed dates, currency, decimals, and response envelopes.
 
 Injected fetch responses cover:
 
@@ -251,6 +251,7 @@ The API will later read PostgreSQL only. Nintendo downtime therefore does not di
 - `JapanEshopAdapter` conforms to the revised `EshopAdapter` interface.
 - Catalog fixtures normalize game, bundle, DLC, and unknown products correctly.
 - Live-shaped null-NSUID directory rows count toward completeness and are skipped from `CatalogItem` output.
+- Catalog and price acquisition enforce the same canonical 14-digit non-zero-leading decimal NSUID with no normalization.
 - Price fixtures distinguish normal, discounted, unreleased, and unavailable entries.
 - Catalog pagination tests cover directory-ID uniqueness, completeness, collision-free signatures, overshoot, null-row skipping, and no-progress behavior.
 - Price deduplication, 50-ID batching, reconciliation, and exact decimal conversion are tested.

@@ -1,6 +1,10 @@
 import type { PriceObservation } from '@eshop-tracker/shared';
 import { EshopError } from '../errors.js';
 import type { PriceFetchResult } from '../price-fetch-result.js';
+import {
+  NINTENDO_SOURCE_ID_VALIDATION_MESSAGE,
+  NintendoSourceIdSchema
+} from '../nintendo-source-id.js';
 import { requestJson, type FetchLike } from '../upstream-json.js';
 import { validatePriceBatch } from '../validate-batch.js';
 import { normalizeNintendoPriceResponse } from './normalize-price.js';
@@ -16,7 +20,6 @@ export interface NintendoPriceClientOptions {
 
 const PRICE_URL = 'https://api.ec.nintendo.com/v1/price';
 const MAX_BATCH_SIZE = 50;
-const CANONICAL_NINTENDO_SOURCE_ID = /^[1-9]\d{13}$/;
 
 function invalidPayload(cause: unknown): EshopError {
   return new EshopError({
@@ -65,10 +68,9 @@ export class NintendoPriceClient {
     const seenInput = new Set<string>();
 
     for (const sourceId of sourceIds) {
-      if (!CANONICAL_NINTENDO_SOURCE_ID.test(sourceId)) {
-        throw invalidPayload(
-          new Error('Nintendo price source ID must be a 14-digit integer')
-        );
+      const parsedSourceId = NintendoSourceIdSchema.safeParse(sourceId);
+      if (!parsedSourceId.success) {
+        throw invalidPayload(new Error(NINTENDO_SOURCE_ID_VALIDATION_MESSAGE));
       }
 
       if (!seenInput.has(sourceId)) {

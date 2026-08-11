@@ -127,6 +127,23 @@ describe('JapanCatalogClient.fetchPage', () => {
     expect(error.cause).toBeDefined();
   });
 
+  it.each([
+    ['leading-zero', '00000000000001'],
+    ['leading-whitespace', ' 70010000000001'],
+    ['trailing-whitespace', '70010000000001 ']
+  ])('rejects a %s NSUID without normalization', async (_label, nsuid) => {
+    const fetch = vi.fn<FetchLike>(async () => jsonResponse(page(1, [
+      rawItem(1, { nsuid })
+    ])));
+    const client = new JapanCatalogClient({ fetch });
+
+    const error = await rejectionFrom(() => client.fetchPage(1));
+
+    expectInvalidPayload(error);
+    expect(error.cause).toBeDefined();
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('preserves an ordinary fetch failure as a NETWORK error', async () => {
     const cause = new Error('connection reset');
     const fetch: FetchLike = async () => { throw cause; };
