@@ -78,12 +78,11 @@ export class JapanCatalogClient {
 
         const sizeBeforePage = seenDirectoryIds.size;
         for (const rawItem of page.result.items) {
-          if (seenDirectoryIds.has(rawItem.id)) continue;
           seenDirectoryIds.add(rawItem.id);
 
           if (rawItem.nsuid === null) continue;
           const item = normalizeJapanCatalogItem(rawItem);
-          if (!items.has(rawItem.nsuid)) items.set(rawItem.nsuid, item);
+          if (!items.has(item.sourceId)) items.set(item.sourceId, item);
         }
 
         if (seenDirectoryIds.size > expectedTotal) {

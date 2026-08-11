@@ -224,8 +224,17 @@ describe('Japanese catalog normalization', () => {
       nsuid: 'not-priceable',
       title: 'Synthetic Test Item'
     }],
-    ['missing directory id', { nsuid: null, sform: 'HAC_VB' }],
-    ['blank directory id', { id: '   ', nsuid: null, sform: 'HAC_VB' }]
+    ['missing unpriceable directory id', { nsuid: null, sform: 'HAC_VB' }],
+    ['blank unpriceable directory id', { id: '   ', nsuid: null, sform: 'HAC_VB' }],
+    ['missing trackable directory id', {
+      nsuid: '70010000009999',
+      title: 'Synthetic Test Item'
+    }],
+    ['blank trackable directory id', {
+      id: '   ',
+      nsuid: '70010000009999',
+      title: 'Synthetic Test Item'
+    }]
   ])('rejects a directory row with %s', (_name, item) => {
     expect(JapanCatalogPageSchema.safeParse(pageWithItems([item])).success).toBe(false);
   });

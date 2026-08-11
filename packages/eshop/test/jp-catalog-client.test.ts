@@ -286,6 +286,53 @@ describe('JapanCatalogClient.fetchAll', () => {
     ]);
   });
 
+  it('normalizes a repeated directory row that becomes trackable on a later page', async () => {
+    const { client } = clientForPages([
+      page(3, [
+        unpriceableItem('directory-A'),
+        rawItem(2, { id: 'directory-B' })
+      ]),
+      page(3, [
+        rawItem(1, { id: 'directory-A' }),
+        rawItem(3, { id: 'directory-C' })
+      ])
+    ]);
+
+    const result = await client.fetchAll();
+
+    expect(result.map((item) => item.sourceId)).toEqual([
+      '70010000000002',
+      '70010000000001',
+      '70010000000003'
+    ]);
+  });
+
+  it('normalizes a trackable row after an unpriceable row with the same directory id', async () => {
+    const { client, fetch } = clientForPages([
+      page(1, [
+        unpriceableItem('directory-A'),
+        rawItem(1, { id: 'directory-A' })
+      ])
+    ]);
+
+    const result = await client.fetchAll();
+
+    expect(result.map((item) => item.sourceId)).toEqual(['70010000000001']);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('returns an empty batch when every stable directory row is unpriceable', async () => {
+    const { client, fetch } = clientForPages([
+      page(2, [
+        unpriceableItem('directory-A'),
+        unpriceableItem('directory-B')
+      ])
+    ]);
+
+    await expect(client.fetchAll()).resolves.toEqual([]);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('returns an empty batch for a stable zero-total first page', async () => {
     const { client, fetch } = clientForPages([page(0, [])]);
 
