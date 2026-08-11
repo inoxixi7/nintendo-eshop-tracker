@@ -5,6 +5,20 @@ import {
 } from '@eshop-tracker/shared';
 import type { JapanCatalogItem } from './catalog-schema.js';
 
+const GAME_SOFTWARE_FORMS = new Set([
+  'HAC_DL',
+  'HAC_DOWNLOADABLE',
+  'HAC_CARD',
+  'HAC_FC/NES',
+  'HAC_SFC/SNES',
+  'HAC_MD',
+  'HAC_N64',
+  'HAC_AGB',
+  'HAC_DMG',
+  'HAC_VB',
+  'HAC_CGB'
+]);
+
 function nullableText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed === undefined || trimmed.length === 0 ? null : trimmed;
@@ -30,7 +44,7 @@ function normalizeReleaseDate(item: JapanCatalogItem): string | null {
 function productType(sform: string | null | undefined): ProductType {
   if (sform === 'DLC' || sform === 'DL_DLC') return 'dlc';
   if (sform === 'set') return 'bundle';
-  if (sform?.startsWith('HAC_') === true) return 'game';
+  if (sform !== null && sform !== undefined && GAME_SOFTWARE_FORMS.has(sform)) return 'game';
   return 'unknown';
 }
 

@@ -8,8 +8,8 @@
         "icode": "HAC-A0001",
         "maker": "Sample Publisher A",
         "text": "Synthetic game description.",
-        "siurl": "synthetic-game-primary",
-        "iurl": "synthetic-game-fallback",
+        "siurl": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "iurl": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "dsdate": "2026-08-21 00:00:00",
         "sform": "HAC_DL",
         "fixtureMarker": "game-extra"
@@ -20,7 +20,7 @@
         "icode": null,
         "maker": "Sample Publisher B",
         "text": "Synthetic bundle description.",
-        "iurl": "synthetic-bundle",
+        "iurl": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "sdate": "2026.8.27",
         "sform": "set",
         "fixtureMarker": "bundle-extra"

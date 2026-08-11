@@ -6,6 +6,9 @@ import {
 import { normalizeJapanCatalogItem } from '../src/japan/normalize-catalog-item.js';
 import { readJsonFixture } from './fixture.js';
 
+const PRIMARY_IMAGE_HASH = 'a'.repeat(64);
+const FALLBACK_IMAGE_HASH = 'b'.repeat(64);
+
 function rawItem(overrides: Record<string, unknown> = {}) {
   return JapanCatalogItemSchema.parse({
     nsuid: '70010000009999',
@@ -32,7 +35,7 @@ describe('Japanese catalog normalization', () => {
         publisher: 'Sample Publisher A',
         developer: null,
         description: 'Synthetic game description.',
-        imageUrl: 'https://img-eshop.cdn.nintendo.net/i/synthetic-game-primary.jpg',
+        imageUrl: 'https://img-eshop.cdn.nintendo.net/i/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
         releaseDate: '2026-08-21',
         productType: 'game',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000001',
@@ -47,7 +50,7 @@ describe('Japanese catalog normalization', () => {
         publisher: 'Sample Publisher B',
         developer: null,
         description: 'Synthetic bundle description.',
-        imageUrl: 'https://img-eshop.cdn.nintendo.net/i/synthetic-bundle.jpg',
+        imageUrl: 'https://img-eshop.cdn.nintendo.net/i/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.jpg',
         releaseDate: '2026-08-27',
         productType: 'bundle',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000002',
@@ -93,14 +96,14 @@ describe('Japanese catalog normalization', () => {
       icode: '  HAC-A0999  ',
       maker: '  Sample Publisher  ',
       text: '  Synthetic description.  ',
-      siurl: '  preferred-image  ',
-      iurl: '  fallback-image  ',
+      siurl: `  ${PRIMARY_IMAGE_HASH}  `,
+      iurl: `  ${FALLBACK_IMAGE_HASH}  `,
       dsdate: '  2026-08-07  ',
       sdate: '  2026.8.27  '
     });
     const fallbackItem = rawItem({
       siurl: '   ',
-      iurl: '  fallback-image  ',
+      iurl: `  ${FALLBACK_IMAGE_HASH}  `,
       dsdate: '   ',
       sdate: '  2026.8.27  '
     });
@@ -109,8 +112,8 @@ describe('Japanese catalog normalization', () => {
       icode: 'HAC-A0999',
       maker: 'Sample Publisher',
       text: 'Synthetic description.',
-      siurl: 'preferred-image',
-      iurl: 'fallback-image',
+      siurl: PRIMARY_IMAGE_HASH,
+      iurl: FALLBACK_IMAGE_HASH,
       dsdate: '2026-08-07',
       sdate: '2026.8.27'
     }));
@@ -118,17 +121,17 @@ describe('Japanese catalog normalization', () => {
       productCode: 'HAC-A0999',
       publisher: 'Sample Publisher',
       description: 'Synthetic description.',
-      imageUrl: 'https://img-eshop.cdn.nintendo.net/i/preferred-image.jpg',
+      imageUrl: 'https://img-eshop.cdn.nintendo.net/i/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
       releaseDate: '2026-08-07'
     }));
     expect(fallbackItem).toEqual(expect.objectContaining({
       siurl: '',
-      iurl: 'fallback-image',
+      iurl: FALLBACK_IMAGE_HASH,
       dsdate: '',
       sdate: '2026.8.27'
     }));
     expect(normalizeJapanCatalogItem(fallbackItem)).toEqual(expect.objectContaining({
-      imageUrl: 'https://img-eshop.cdn.nintendo.net/i/fallback-image.jpg',
+      imageUrl: 'https://img-eshop.cdn.nintendo.net/i/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg',
       releaseDate: '2026-08-27'
     }));
   });
@@ -139,6 +142,47 @@ describe('Japanese catalog normalization', () => {
     ['blank title', { nsuid: '70010000009999', title: '   ' }]
   ])('rejects a raw item with %s', (_name, item) => {
     expect(JapanCatalogItemSchema.safeParse(item).success).toBe(false);
+  });
+
+  it.each([
+    ['letters', '7001000000000a'],
+    ['13 digits', '7001000000000'],
+    ['15 digits', '700100000000001'],
+    ['query injection', '7001000000000?'],
+    ['fragment injection', '7001000000000#'],
+    ['path traversal', '7001000/../../']
+  ])('rejects an NSUID containing %s', (_name, nsuid) => {
+    expect(JapanCatalogItemSchema.safeParse({
+      nsuid,
+      title: 'Synthetic Test Item'
+    }).success).toBe(false);
+  });
+
+  it.each(['siurl', 'iurl'] as const)('rejects unsafe values in %s', (field) => {
+    const invalidHashes = [
+      `${'a'.repeat(63)}?`,
+      `${'a'.repeat(63)}#`,
+      '../',
+      `${'a'.repeat(31)}\u0000${'a'.repeat(32)}`,
+      `${'a'.repeat(31)} ${'a'.repeat(32)}`,
+      'A'.repeat(64)
+    ];
+
+    for (const value of invalidHashes) {
+      expect(JapanCatalogItemSchema.safeParse({
+        nsuid: '70010000009999',
+        title: 'Synthetic Test Item',
+        [field]: value
+      }).success).toBe(false);
+    }
+  });
+
+  it('builds the exact CDN URL from a valid image hash', () => {
+    const hash = '0123456789abcdef'.repeat(4);
+
+    expect(normalizeJapanCatalogItem(rawItem({ siurl: hash })).imageUrl).toBe(
+      'https://img-eshop.cdn.nintendo.net/i/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.jpg'
+    );
   });
 
   it.each([
@@ -199,7 +243,20 @@ describe('Japanese catalog normalization', () => {
     ['DLC', 'dlc'],
     ['DL_DLC', 'dlc'],
     ['set', 'bundle'],
-    ['HAC_DOWNLOAD', 'game'],
+    ['HAC_DL', 'game'],
+    ['HAC_DOWNLOADABLE', 'game'],
+    ['HAC_CARD', 'game'],
+    ['HAC_FC/NES', 'game'],
+    ['HAC_SFC/SNES', 'game'],
+    ['HAC_MD', 'game'],
+    ['HAC_N64', 'game'],
+    ['HAC_AGB', 'game'],
+    ['HAC_DMG', 'game'],
+    ['HAC_VB', 'game'],
+    ['HAC_CGB', 'game'],
+    ['HAC_DLC', 'unknown'],
+    ['HAC_FUTURE', 'unknown'],
+    ['HAC_DOWNLOAD', 'unknown'],
     ['mystery_form', 'unknown'],
     [null, 'unknown']
   ] as const)('maps the %s software form to %s', (sform, expected) => {
