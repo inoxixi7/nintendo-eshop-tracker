@@ -105,6 +105,23 @@ describe('requestJson', () => {
     expect(error).toBe(reason);
   });
 
+  it('throws a null aborted signal reason unchanged', async () => {
+    const fetchCause = new Error('fetch aborted');
+    const controller = new AbortController();
+    controller.abort(null);
+    const fetch: FetchLike = async () => { throw fetchCause; };
+
+    const error = await rejectionFrom(() => requestJson({
+      fetch,
+      url: new URL('https://example.com/catalog'),
+      country: 'JP',
+      signal: controller.signal
+    }));
+
+    expect(error).toBe(null);
+    expect(error).not.toBe(fetchCause);
+  });
+
   it('falls back to the fetch cause when an aborted signal has no reason', async () => {
     const cause = new Error('fetch aborted');
     const signal = { aborted: true, reason: undefined } as AbortSignal;

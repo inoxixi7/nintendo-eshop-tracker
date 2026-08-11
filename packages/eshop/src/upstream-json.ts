@@ -21,7 +21,10 @@ export async function requestJson(options: RequestJsonOptions): Promise<unknown>
     const init = options.signal === undefined ? undefined : { signal: options.signal };
     response = await options.fetch(options.url, init);
   } catch (cause) {
-    if (options.signal?.aborted === true) throw options.signal.reason ?? cause;
+    if (options.signal?.aborted === true) {
+      const reason = options.signal.reason;
+      throw reason === undefined ? cause : reason;
+    }
     if (isAbortError(cause)) throw cause;
 
     throw new EshopError({
