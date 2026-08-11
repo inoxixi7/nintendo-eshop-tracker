@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const NullableTrimmedString = z.string().nullable().optional();
+const NullableTrimmedString = z.string().trim().nullable().optional();
 
 export const JapanCatalogItemSchema = z.object({
   nsuid: z.string().trim().min(1),
@@ -12,7 +12,7 @@ export const JapanCatalogItemSchema = z.object({
   iurl: NullableTrimmedString,
   dsdate: NullableTrimmedString,
   sdate: NullableTrimmedString,
-  sform: z.string().trim().min(1).nullable().optional()
+  sform: z.string().trim().nullable().optional()
 }).loose();
 
 export const JapanCatalogPageSchema = z.object({

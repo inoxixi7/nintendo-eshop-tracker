@@ -15,7 +15,8 @@ function normalizeReleaseDate(item: JapanCatalogItem): string | null {
   if (raw === null) return null;
 
   const match = /^(\d{4})-(\d{2})-(\d{2})(?: 00:00:00)?$/.exec(raw)
-    ?? /^(\d{4})[.-](\d{1,2})[.-](\d{1,2})$/.exec(raw);
+    ?? /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/.exec(raw)
+    ?? /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw);
   if (match === null) throw new Error('Unsupported Japanese release date');
 
   const [, year, month, day] = match;

@@ -88,6 +88,51 @@ describe('Japanese catalog normalization', () => {
     expect(input).toEqual(before);
   });
 
+  it('trims optional text fields before producing the final mapping', () => {
+    const item = rawItem({
+      icode: '  HAC-A0999  ',
+      maker: '  Sample Publisher  ',
+      text: '  Synthetic description.  ',
+      siurl: '  preferred-image  ',
+      iurl: '  fallback-image  ',
+      dsdate: '  2026-08-07  ',
+      sdate: '  2026.8.27  '
+    });
+    const fallbackItem = rawItem({
+      siurl: '   ',
+      iurl: '  fallback-image  ',
+      dsdate: '   ',
+      sdate: '  2026.8.27  '
+    });
+
+    expect(item).toEqual(expect.objectContaining({
+      icode: 'HAC-A0999',
+      maker: 'Sample Publisher',
+      text: 'Synthetic description.',
+      siurl: 'preferred-image',
+      iurl: 'fallback-image',
+      dsdate: '2026-08-07',
+      sdate: '2026.8.27'
+    }));
+    expect(normalizeJapanCatalogItem(item)).toEqual(expect.objectContaining({
+      productCode: 'HAC-A0999',
+      publisher: 'Sample Publisher',
+      description: 'Synthetic description.',
+      imageUrl: 'https://img-eshop.cdn.nintendo.net/i/preferred-image.jpg',
+      releaseDate: '2026-08-07'
+    }));
+    expect(fallbackItem).toEqual(expect.objectContaining({
+      siurl: '',
+      iurl: 'fallback-image',
+      dsdate: '',
+      sdate: '2026.8.27'
+    }));
+    expect(normalizeJapanCatalogItem(fallbackItem)).toEqual(expect.objectContaining({
+      imageUrl: 'https://img-eshop.cdn.nintendo.net/i/fallback-image.jpg',
+      releaseDate: '2026-08-27'
+    }));
+  });
+
   it.each([
     ['missing NSUID', { title: 'Valid title' }],
     ['blank NSUID', { nsuid: '   ', title: 'Valid title' }],
@@ -125,7 +170,9 @@ describe('Japanese catalog normalization', () => {
     '2026-02-31 00:00:00',
     '2026/08/27',
     '27.8.2026',
-    '2026-8-27 00:00:00'
+    '2026-8-27 00:00:00',
+    '2026.8-7',
+    '2026-8.7'
   ])('rejects an invalid or unsupported dsdate %s', (dsdate) => {
     expect(() => normalizeJapanCatalogItem(rawItem({ dsdate }))).toThrow();
   });
@@ -161,5 +208,9 @@ describe('Japanese catalog normalization', () => {
 
   it('maps a missing software form to unknown', () => {
     expect(normalizeJapanCatalogItem(rawItem()).productType).toBe('unknown');
+  });
+
+  it('maps an ambiguous blank software form to unknown', () => {
+    expect(normalizeJapanCatalogItem(rawItem({ sform: '   ' })).productType).toBe('unknown');
   });
 });
