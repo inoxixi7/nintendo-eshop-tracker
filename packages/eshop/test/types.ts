@@ -5,6 +5,7 @@ declare const signal: AbortSignal;
 declare const sourceIds: readonly ['70010000000141', '70010000000185'];
 
 adapter.fetchCatalog(signal);
+adapter.fetchPrices(sourceIds);
 const result: Promise<PriceFetchResult> = adapter.fetchPrices(sourceIds, signal);
 
 void result;
