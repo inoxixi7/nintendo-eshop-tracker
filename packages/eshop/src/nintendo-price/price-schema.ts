@@ -28,7 +28,9 @@ const AvailablePriceSchema = z.object({
 
 const UnavailablePriceSchema = z.object({
   title_id: TitleIdSchema,
-  sales_status: z.literal('not_found')
+  sales_status: z.literal('not_found'),
+  regular_price: z.never().optional(),
+  discount_price: z.never().optional()
 }).loose();
 
 export const NintendoPriceResponseSchema = z.object({

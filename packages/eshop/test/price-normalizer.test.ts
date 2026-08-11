@@ -198,29 +198,83 @@ describe('Nintendo JP raw price schema', () => {
   });
 
   it.each([
-    ['null', null],
-    ['missing raw value', {
+    ['amount', { currency: 'JPY', raw_value: '7980' }],
+    ['currency', { amount: 'synthetic', raw_value: '7980' }],
+    ['raw_value', { amount: 'synthetic', currency: 'JPY' }]
+  ])('rejects regular_price missing %s', (_field, regular_price) => {
+    const raw = response([availablePrice({ regular_price })]);
+
+    expect(NintendoPriceResponseSchema.safeParse(raw).success).toBe(false);
+  });
+
+  it('rejects a null discount_price', () => {
+    const raw = response([availablePrice({ discount_price: null })]);
+
+    expect(NintendoPriceResponseSchema.safeParse(raw).success).toBe(false);
+  });
+
+  it.each([
+    ['amount', {
+      currency: 'JPY',
+      raw_value: '4200',
+      start_datetime: '2026-08-01T00:00:00Z',
+      end_datetime: '2026-08-31T00:00:00Z'
+    }],
+    ['currency', {
+      amount: 'synthetic',
+      raw_value: '4200',
+      start_datetime: '2026-08-01T00:00:00Z',
+      end_datetime: '2026-08-31T00:00:00Z'
+    }],
+    ['raw_value', {
       amount: 'synthetic',
       currency: 'JPY',
       start_datetime: '2026-08-01T00:00:00Z',
       end_datetime: '2026-08-31T00:00:00Z'
     }],
-    ['missing start', {
+    ['start_datetime', {
       amount: 'synthetic',
       currency: 'JPY',
       raw_value: '4200',
       end_datetime: '2026-08-31T00:00:00Z'
     }],
-    ['missing end', {
+    ['end_datetime', {
       amount: 'synthetic',
       currency: 'JPY',
       raw_value: '4200',
       start_datetime: '2026-08-01T00:00:00Z'
     }]
-  ])('rejects a %s discount_price', (_name, discount_price) => {
+  ])('rejects discount_price missing %s', (_field, discount_price) => {
     const raw = response([availablePrice({ discount_price })]);
 
     expect(NintendoPriceResponseSchema.safeParse(raw).success).toBe(false);
+  });
+
+  it.each([
+    ['regular_price', {
+      title_id: 70010000009999,
+      sales_status: 'not_found',
+      regular_price: money({ currency: 'USD' })
+    }],
+    ['discount_price', {
+      title_id: 70010000009999,
+      sales_status: 'not_found',
+      discount_price: discountMoney({ end_datetime: 'bad time' })
+    }]
+  ])('rejects not_found with contradictory %s even when it is malformed', (_field, price) => {
+    expect(NintendoPriceResponseSchema.safeParse(response([price])).success).toBe(false);
+  });
+
+  it('accepts an additive unknown field on not_found', () => {
+    const result = NintendoPriceResponseSchema.parse(response([{
+      title_id: 70010000009999,
+      sales_status: 'not_found',
+      upstream_marker: { retained: true }
+    }]));
+
+    expect(result.prices[0]).toEqual(expect.objectContaining({
+      upstream_marker: { retained: true }
+    }));
   });
 
   it.each([
@@ -264,15 +318,22 @@ describe('Nintendo JP raw price schema', () => {
 
 describe('Nintendo JP normalized price validation', () => {
   it.each([
-    ['fractional JPY', '7980.0'],
-    ['localized raw value', 'JPY 7,980'],
-    ['unsafe raw value', '9007199254740992']
-  ])('rejects %s during normalization', (_name, raw_value) => {
+    ['localized raw value', 'JPY 7,980', 'Invalid raw price'],
+    ['fractional JPY', '7980.0', 'Excess price precision'],
+    ['unsafe raw value', '9007199254740992', 'Price exceeds safe integer range']
+  ])('preserves the Task 5 error for %s', (_name, raw_value, expectedMessage) => {
     const parsed = NintendoPriceResponseSchema.parse(response([
       availablePrice({ regular_price: money({ raw_value }) })
     ]));
 
-    expect(() => normalizeNintendoPriceResponse(parsed, OBSERVED_AT)).toThrow();
+    try {
+      normalizeNintendoPriceResponse(parsed, OBSERVED_AT);
+      throw new Error('expected normalization to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(expectedMessage);
+      expect((error as Error).message).not.toContain(raw_value);
+    }
   });
 
   it('rejects a discount amount greater than the regular amount', () => {
