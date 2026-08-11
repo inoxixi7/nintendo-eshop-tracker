@@ -14,7 +14,8 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "vitest run",
+    "test": "vitest run --exclude 'test/live/**/*.test.ts'",
+    "test:live:jp": "vitest run --config vitest.live.config.ts",
     "typecheck": "pnpm --filter @eshop-tracker/shared build && tsc -p tsconfig.json"
   },
   "dependencies": {
