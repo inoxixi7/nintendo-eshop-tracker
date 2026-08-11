@@ -1,0 +1,49 @@
+{
+  "personalized": false,
+  "country": "JP",
+  "prices": [
+    {
+      "title_id": 70010000000001,
+      "sales_status": "onsale",
+      "regular_price": {
+        "amount": "localized display text; do not parse",
+        "currency": "JPY",
+        "raw_value": "7980",
+        "money_marker": "regular-extra"
+      },
+      "entry_marker": "normal-extra"
+    },
+    {
+      "title_id": 70010000000002,
+      "sales_status": "onsale",
+      "regular_price": {
+        "amount": "synthetic regular display",
+        "currency": "JPY",
+        "raw_value": "6500"
+      },
+      "discount_price": {
+        "amount": "synthetic discount display",
+        "currency": "JPY",
+        "raw_value": "4200",
+        "start_datetime": "2026-08-01T00:00:00Z",
+        "end_datetime": "2026-08-31T23:59:59.123Z",
+        "discount_marker": "discount-extra"
+      }
+    },
+    {
+      "title_id": 70010000000003,
+      "sales_status": "unreleased",
+      "regular_price": {
+        "amount": "synthetic unreleased display",
+        "currency": "JPY",
+        "raw_value": "1200"
+      }
+    },
+    {
+      "title_id": 70010000000004,
+      "sales_status": "not_found",
+      "entry_marker": "unavailable-extra"
+    }
+  ],
+  "envelope_marker": "fixture-extra"
+}
