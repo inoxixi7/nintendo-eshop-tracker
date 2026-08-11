@@ -1,10 +1,10 @@
 import type { CurrencyCode } from '@eshop-tracker/shared';
 
-const scaleByCurrency = new Map<CurrencyCode, number>([
-  ['JPY', 0],
-  ['USD', 2],
-  ['GBP', 2]
-]);
+const scaleByCurrency = {
+  JPY: 0,
+  USD: 2,
+  GBP: 2
+} satisfies Record<CurrencyCode, number>;
 const maxSafeIntegerDigits = String(Number.MAX_SAFE_INTEGER).length;
 const maxSafeMinorAmount = BigInt(Number.MAX_SAFE_INTEGER);
 
@@ -12,8 +12,8 @@ export function parseMinorAmount(raw: string, currency: CurrencyCode): number {
   const match = /^(0|[1-9]\d*)(?:\.(\d+))?$/.exec(raw);
   if (match === null) throw new Error('Invalid raw price');
 
-  const scale = scaleByCurrency.get(currency);
-  if (scale === undefined) throw new Error('Unsupported currency');
+  if (!Object.hasOwn(scaleByCurrency, currency)) throw new Error('Unsupported currency');
+  const scale = scaleByCurrency[currency];
 
   const major = match[1];
   if (major === undefined) throw new Error('Invalid raw price');
