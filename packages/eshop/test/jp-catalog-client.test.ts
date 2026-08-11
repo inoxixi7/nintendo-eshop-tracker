@@ -317,6 +317,31 @@ describe('JapanCatalogClient.fetchAll', () => {
     );
   });
 
+  it('does not confuse distinct directory id arrays whose comma-joined signatures collide', async () => {
+    const { client, fetch } = clientForPages([
+      page(5, [
+        rawItem(1, { id: 'a,b' }),
+        rawItem(2, { id: 'c' })
+      ]),
+      page(5, [
+        rawItem(3, { id: 'a' }),
+        rawItem(4, { id: 'b,c' })
+      ]),
+      page(5, [rawItem(5, { id: 'd' })])
+    ]);
+
+    const result = await client.fetchAll();
+
+    expect(result.map((item) => item.sourceId)).toEqual([
+      '70010000000001',
+      '70010000000002',
+      '70010000000003',
+      '70010000000004',
+      '70010000000005'
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
   it('rejects a non-identical page that makes zero unique progress', async () => {
     const { client } = clientForPages([
       page(3, [rawItem(1), rawItem(2)]),

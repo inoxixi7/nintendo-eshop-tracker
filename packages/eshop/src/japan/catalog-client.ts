@@ -24,7 +24,7 @@ function invalidPayload(cause: unknown): EshopError {
 }
 
 function pageSignature(page: JapanCatalogPage): string {
-  return page.result.items.map((item) => item.id).join(',');
+  return JSON.stringify(page.result.items.map((item) => item.id));
 }
 
 export class JapanCatalogClient {
