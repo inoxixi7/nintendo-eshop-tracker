@@ -55,14 +55,39 @@ afterEach(() => {
 });
 
 describe('createJapanEshopAdapter', () => {
-  it('constructs the default JP adapter without network access', () => {
-    const fetch = vi.fn<FetchLike>();
+  it('binds the default fetch receiver and remains offline under a stub', async () => {
+    const signal = new AbortController().signal;
+    let callCount = 0;
+    let receivedThis: unknown;
+    let receivedSignal: AbortSignal | null | undefined;
+    const fetch: FetchLike = function (
+      this: unknown,
+      _input: RequestInfo | URL,
+      init?: RequestInit
+    ) {
+      callCount += 1;
+      receivedThis = this;
+      receivedSignal = init?.signal;
+      if (this !== globalThis) throw new Error('wrong fetch receiver');
+      return Promise.resolve(jsonResponse({
+        status: 0,
+        result: { total: 0, items: [] }
+      }));
+    };
     vi.stubGlobal('fetch', fetch);
 
-    const adapter = createJapanEshopAdapter();
+    try {
+      const adapter = createJapanEshopAdapter();
 
-    expect(adapter.country).toBe('JP');
-    expect(fetch).not.toHaveBeenCalled();
+      expect(adapter.country).toBe('JP');
+      expect(callCount).toBe(0);
+      await expect(adapter.fetchCatalog(signal)).resolves.toEqual([]);
+      expect(callCount).toBe(1);
+      expect(receivedThis).toBe(globalThis);
+      expect(receivedSignal).toBe(signal);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('composes the catalog and price clients with one injected fetch and clock', async () => {

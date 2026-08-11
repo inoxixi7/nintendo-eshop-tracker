@@ -26,6 +26,12 @@ const readonlyOptions: Readonly<JapanEshopAdapterOptions> = {
   now: () => new Date('2026-08-11T00:00:00Z')
 };
 const readonlyOptionsAdapter: EshopAdapter = createJapanEshopAdapter(readonlyOptions);
+declare const japanOptions: JapanEshopAdapterOptions;
+
+// @ts-expect-error Injected fetch is immutable after options construction.
+japanOptions.fetch = globalThis.fetch;
+// @ts-expect-error Injected clock is immutable after options construction.
+japanOptions.now = () => new Date();
 
 // @ts-expect-error The public factory only accepts dependency injection options.
 createJapanEshopAdapter({ country: 'JP' });
