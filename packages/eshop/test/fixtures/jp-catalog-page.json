@@ -1,0 +1,51 @@
+{
+  "result": {
+    "total": 4,
+    "items": [
+      {
+        "nsuid": "70010000000001",
+        "title": "Synthetic Game",
+        "icode": "HAC-A0001",
+        "maker": "Sample Publisher A",
+        "text": "Synthetic game description.",
+        "siurl": "synthetic-game-primary",
+        "iurl": "synthetic-game-fallback",
+        "dsdate": "2026-08-21 00:00:00",
+        "sform": "HAC_DL",
+        "fixtureMarker": "game-extra"
+      },
+      {
+        "nsuid": "70010000000002",
+        "title": "Synthetic Bundle",
+        "icode": null,
+        "maker": "Sample Publisher B",
+        "text": "Synthetic bundle description.",
+        "iurl": "synthetic-bundle",
+        "sdate": "2026.8.27",
+        "sform": "set",
+        "fixtureMarker": "bundle-extra"
+      },
+      {
+        "nsuid": "70010000000003",
+        "title": "Synthetic DLC",
+        "icode": "DLC-A0003",
+        "maker": null,
+        "text": null,
+        "siurl": "   ",
+        "iurl": null,
+        "sform": "DLC",
+        "fixtureMarker": "dlc-extra"
+      },
+      {
+        "nsuid": "70010000000004",
+        "title": "Synthetic Mystery",
+        "icode": "   ",
+        "maker": "   ",
+        "text": "   ",
+        "sform": "mystery_form",
+        "fixtureMarker": "unknown-extra"
+      }
+    ]
+  },
+  "status": 0
+}
