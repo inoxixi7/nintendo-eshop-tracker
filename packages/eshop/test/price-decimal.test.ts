@@ -1,6 +1,23 @@
 import type { CurrencyCode } from '@eshop-tracker/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseMinorAmount } from '../src/nintendo-price/decimal.js';
+
+function expectParseError(
+  raw: string,
+  currency: CurrencyCode,
+  expectedMessage: string
+): void {
+  try {
+    parseMinorAmount(raw, currency);
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(expectedMessage);
+    expect((error as Error).message).not.toContain(raw);
+    return;
+  }
+
+  throw new Error('expected price parsing to throw');
+}
 
 describe('parseMinorAmount', () => {
   it.each([
@@ -50,6 +67,10 @@ describe('parseMinorAmount', () => {
     expect(() => parseMinorAmount('1', unsupportedCurrency)).toThrow('Unsupported currency');
   });
 
+  it.each(['constructor', '__proto__'])('rejects prototype property currency %s', (currency) => {
+    expectParseError('7', currency as CurrencyCode, 'Unsupported currency');
+  });
+
   it.each([
     ['90071992547409.92', 'USD'],
     ['9007199254740992', 'JPY']
@@ -58,13 +79,28 @@ describe('parseMinorAmount', () => {
   });
 
   it('does not include the raw price in an error message', () => {
-    const raw = '9'.repeat(200);
+    const raw = '9'.repeat(100_000);
 
-    expect(() => parseMinorAmount(raw, 'JPY')).toThrow('Price exceeds safe integer range');
+    expectParseError(raw, 'JPY', 'Price exceeds safe integer range');
+  });
+
+  it('rejects an obviously oversized major amount before BigInt conversion', () => {
+    const bigIntSpy = vi.spyOn(globalThis, 'BigInt');
+
     try {
-      parseMinorAmount(raw, 'JPY');
-    } catch (error) {
-      expect((error as Error).message).not.toContain(raw);
+      expectParseError('10000000000000000', 'JPY', 'Price exceeds safe integer range');
+      expect(bigIntSpy).not.toHaveBeenCalled();
+    } finally {
+      bigIntSpy.mockRestore();
     }
+  });
+
+  it.each([
+    ['01', 'JPY', 'Invalid raw price'],
+    ['1.0', 'JPY', 'Excess price precision'],
+    ['7', 'EUR', 'Unsupported currency'],
+    ['9007199254740992', 'JPY', 'Price exceeds safe integer range']
+  ] as const)('uses the exact stable error for %s %s', (raw, currency, expectedMessage) => {
+    expectParseError(raw, currency as CurrencyCode, expectedMessage);
   });
 });
