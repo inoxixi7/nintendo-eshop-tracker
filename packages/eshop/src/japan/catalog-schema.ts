@@ -8,6 +8,7 @@ const ImageHashSchema = z.string()
   .optional();
 
 export const JapanCatalogItemSchema = z.object({
+  id: z.string().trim().min(1),
   nsuid: z.string().trim().regex(/^\d{14}$/),
   title: z.string().trim().min(1),
   icode: NullableTrimmedString,
@@ -20,13 +21,24 @@ export const JapanCatalogItemSchema = z.object({
   sform: z.string().trim().nullable().optional()
 }).loose();
 
+const JapanUnpriceableCatalogItemSchema = z.object({
+  id: z.string().trim().min(1),
+  nsuid: z.null()
+}).loose();
+
+const JapanCatalogPageEntrySchema = z.union([
+  JapanCatalogItemSchema,
+  JapanUnpriceableCatalogItemSchema
+]);
+
 export const JapanCatalogPageSchema = z.object({
   result: z.object({
     total: z.number().int().nonnegative(),
-    items: z.array(JapanCatalogItemSchema)
+    items: z.array(JapanCatalogPageEntrySchema)
   }).loose(),
   status: z.number().optional()
 }).loose();
 
 export type JapanCatalogItem = z.infer<typeof JapanCatalogItemSchema>;
+export type JapanCatalogPageEntry = z.infer<typeof JapanCatalogPageEntrySchema>;
 export type JapanCatalogPage = z.infer<typeof JapanCatalogPageSchema>;

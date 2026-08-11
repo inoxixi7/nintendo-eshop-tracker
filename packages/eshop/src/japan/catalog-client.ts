@@ -24,7 +24,7 @@ function invalidPayload(cause: unknown): EshopError {
 }
 
 function pageSignature(page: JapanCatalogPage): string {
-  return page.result.items.map((item) => item.nsuid).join(',');
+  return page.result.items.map((item) => item.id).join(',');
 }
 
 export class JapanCatalogClient {
@@ -57,6 +57,7 @@ export class JapanCatalogClient {
 
   async fetchAll(signal?: AbortSignal): Promise<CatalogItem[]> {
     const items = new Map<string, CatalogItem>();
+    const seenDirectoryIds = new Set<string>();
     const signatures = new Set<string>();
     let expectedTotal: number | undefined;
     let pageNumber = 1;
@@ -75,17 +76,21 @@ export class JapanCatalogClient {
         const repeatedSignature = signatures.has(signature);
         signatures.add(signature);
 
-        const sizeBeforePage = items.size;
+        const sizeBeforePage = seenDirectoryIds.size;
         for (const rawItem of page.result.items) {
+          if (seenDirectoryIds.has(rawItem.id)) continue;
+          seenDirectoryIds.add(rawItem.id);
+
+          if (rawItem.nsuid === null) continue;
           const item = normalizeJapanCatalogItem(rawItem);
-          if (!items.has(item.sourceId)) items.set(item.sourceId, item);
+          if (!items.has(rawItem.nsuid)) items.set(rawItem.nsuid, item);
         }
 
-        if (items.size > expectedTotal) {
+        if (seenDirectoryIds.size > expectedTotal) {
           throw new Error('Japanese catalog unique item count exceeded total');
         }
 
-        if (items.size === expectedTotal) {
+        if (seenDirectoryIds.size === expectedTotal) {
           return validateCatalogBatch([...items.values()], 'JP');
         }
 
@@ -93,7 +98,7 @@ export class JapanCatalogClient {
           throw new Error('Japanese catalog page signature repeated before completion');
         }
 
-        if (items.size === sizeBeforePage) {
+        if (seenDirectoryIds.size === sizeBeforePage) {
           throw new Error('Japanese catalog page made no unique progress');
         }
       } catch (cause) {

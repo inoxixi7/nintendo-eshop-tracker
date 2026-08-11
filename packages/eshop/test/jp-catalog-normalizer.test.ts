@@ -9,8 +9,13 @@ import { readJsonFixture } from './fixture.js';
 const PRIMARY_IMAGE_HASH = 'a'.repeat(64);
 const FALLBACK_IMAGE_HASH = 'b'.repeat(64);
 
+function pageWithItems(items: unknown[]) {
+  return { status: 0, result: { total: items.length, items } };
+}
+
 function rawItem(overrides: Record<string, unknown> = {}) {
   return JapanCatalogItemSchema.parse({
+    id: 'synthetic-item',
     nsuid: '70010000009999',
     title: 'Synthetic Test Item',
     ...overrides
@@ -22,8 +27,9 @@ describe('Japanese catalog normalization', () => {
     const input = await readJsonFixture('jp-catalog-page.json');
     const before = structuredClone(input);
     const page = JapanCatalogPageSchema.parse(input);
+    const trackableItems = page.result.items.filter((item) => item.nsuid !== null);
 
-    const normalized = page.result.items.map(normalizeJapanCatalogItem);
+    const normalized = trackableItems.map(normalizeJapanCatalogItem);
 
     expect(normalized).toEqual([
       {
@@ -87,7 +93,7 @@ describe('Japanese catalog normalization', () => {
         sourcePayload: expect.objectContaining({ fixtureMarker: 'unknown-extra' })
       }
     ]);
-    expect(normalized.map((item) => item.sourcePayload)).toEqual(page.result.items);
+    expect(normalized.map((item) => item.sourcePayload)).toEqual(trackableItems);
     expect(input).toEqual(before);
   });
 
@@ -137,9 +143,9 @@ describe('Japanese catalog normalization', () => {
   });
 
   it.each([
-    ['missing NSUID', { title: 'Valid title' }],
-    ['blank NSUID', { nsuid: '   ', title: 'Valid title' }],
-    ['blank title', { nsuid: '70010000009999', title: '   ' }]
+    ['missing NSUID', { id: 'synthetic-item', title: 'Valid title' }],
+    ['blank NSUID', { id: 'synthetic-item', nsuid: '   ', title: 'Valid title' }],
+    ['blank title', { id: 'synthetic-item', nsuid: '70010000009999', title: '   ' }]
   ])('rejects a raw item with %s', (_name, item) => {
     expect(JapanCatalogItemSchema.safeParse(item).success).toBe(false);
   });
@@ -153,6 +159,7 @@ describe('Japanese catalog normalization', () => {
     ['path traversal', '7001000/../../']
   ])('rejects an NSUID containing %s', (_name, nsuid) => {
     expect(JapanCatalogItemSchema.safeParse({
+      id: 'synthetic-item',
       nsuid,
       title: 'Synthetic Test Item'
     }).success).toBe(false);
@@ -170,6 +177,7 @@ describe('Japanese catalog normalization', () => {
 
     for (const value of invalidHashes) {
       expect(JapanCatalogItemSchema.safeParse({
+        id: 'synthetic-item',
         nsuid: '70010000009999',
         title: 'Synthetic Test Item',
         [field]: value
@@ -192,6 +200,34 @@ describe('Japanese catalog normalization', () => {
     ['non-array items', { result: { total: 0, items: {} } }]
   ])('rejects a malformed page envelope with %s', (_name, page) => {
     expect(JapanCatalogPageSchema.safeParse(page).success).toBe(false);
+  });
+
+  it('accepts a live-shaped unpriceable directory row without validating its ignored image path', () => {
+    const unpriceable = {
+      id: 'V-2780_j',
+      nsuid: null,
+      sform: 'HAC_VB',
+      iurl: '/software/feature/nintendo-classics/detail/img/synthetic.jpg',
+      siurl: null,
+      ssitu: 'not_found'
+    };
+
+    expect(JapanCatalogPageSchema.parse(pageWithItems([unpriceable]))).toEqual(
+      pageWithItems([unpriceable])
+    );
+  });
+
+  it.each([
+    ['missing NSUID', { id: 'V-2780_j', sform: 'HAC_VB' }],
+    ['invalid non-null NSUID', {
+      id: 'V-2780_j',
+      nsuid: 'not-priceable',
+      title: 'Synthetic Test Item'
+    }],
+    ['missing directory id', { nsuid: null, sform: 'HAC_VB' }],
+    ['blank directory id', { id: '   ', nsuid: null, sform: 'HAC_VB' }]
+  ])('rejects a directory row with %s', (_name, item) => {
+    expect(JapanCatalogPageSchema.safeParse(pageWithItems([item])).success).toBe(false);
   });
 
   it.each([

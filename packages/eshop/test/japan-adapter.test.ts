@@ -14,6 +14,7 @@ const OBSERVED_AT = '2026-08-11T00:00:00.000Z';
 
 function catalogItem(sourceId: string, title: string) {
   return {
+    id: sourceId,
     nsuid: sourceId,
     title,
     icode: `HAC-A${sourceId.slice(-4)}`,

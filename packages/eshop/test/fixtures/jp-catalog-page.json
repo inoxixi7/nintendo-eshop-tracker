@@ -3,6 +3,7 @@
     "total": 4,
     "items": [
       {
+        "id": "directory-game-1",
         "nsuid": "70010000000001",
         "title": "Synthetic Game",
         "icode": "HAC-A0001",
@@ -15,6 +16,7 @@
         "fixtureMarker": "game-extra"
       },
       {
+        "id": "directory-bundle-2",
         "nsuid": "70010000000002",
         "title": "Synthetic Bundle",
         "icode": null,
@@ -26,6 +28,7 @@
         "fixtureMarker": "bundle-extra"
       },
       {
+        "id": "directory-dlc-3",
         "nsuid": "70010000000003",
         "title": "Synthetic DLC",
         "icode": "DLC-A0003",
@@ -37,6 +40,7 @@
         "fixtureMarker": "dlc-extra"
       },
       {
+        "id": "directory-mystery-4",
         "nsuid": "70010000000004",
         "title": "Synthetic Mystery",
         "icode": "   ",

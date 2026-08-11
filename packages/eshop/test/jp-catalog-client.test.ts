@@ -8,6 +8,7 @@ const IMAGE_HASH = 'a'.repeat(64);
 
 function rawItem(index: number, overrides: Record<string, unknown> = {}) {
   return {
+    id: `directory-item-${index}`,
     nsuid: `700100${index.toString().padStart(8, '0')}`,
     title: `Synthetic Item ${index}`,
     icode: `HAC-A${index.toString().padStart(4, '0')}`,
@@ -17,6 +18,17 @@ function rawItem(index: number, overrides: Record<string, unknown> = {}) {
     dsdate: '2026-08-11',
     sform: 'HAC_DL',
     ...overrides
+  };
+}
+
+function unpriceableItem(id = 'V-2780_j') {
+  return {
+    id,
+    nsuid: null,
+    sform: 'HAC_VB',
+    iurl: '/software/feature/nintendo-classics/detail/img/synthetic.jpg',
+    siurl: null,
+    ssitu: 'not_found'
   };
 }
 
@@ -213,10 +225,13 @@ describe('JapanCatalogClient.fetchAll', () => {
 
   it('accepts cross-page duplicates when the page makes progress and retains the first occurrence', async () => {
     const first = rawItem(1, { title: 'First title' });
-    const duplicate = rawItem(1, { title: 'Later title' });
+    const duplicate = rawItem(1, {
+      id: 'directory-duplicate-nsuid',
+      title: 'Later title'
+    });
     const { client } = clientForPages([
-      page(3, [first, rawItem(2)]),
-      page(3, [duplicate, rawItem(3)])
+      page(4, [first, rawItem(2)]),
+      page(4, [duplicate, rawItem(3)])
     ]);
 
     const result = await client.fetchAll();
@@ -225,6 +240,49 @@ describe('JapanCatalogClient.fetchAll', () => {
       ['70010000000001', 'First title'],
       ['70010000000002', 'Synthetic Item 2'],
       ['70010000000003', 'Synthetic Item 3']
+    ]);
+  });
+
+  it('counts an unpriceable directory row toward completeness but skips catalog output', async () => {
+    const { client, fetch } = clientForPages([
+      page(2, [rawItem(1), unpriceableItem()])
+    ]);
+
+    const result = await client.fetchAll();
+
+    expect(result.map((item) => item.sourceId)).toEqual(['70010000000001']);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('treats a new unpriceable directory row as pagination progress', async () => {
+    const { client, fetch } = clientForPages([
+      page(3, [rawItem(1)]),
+      page(3, [unpriceableItem()]),
+      page(3, [rawItem(2)])
+    ]);
+
+    const result = await client.fetchAll();
+
+    expect(result.map((item) => item.sourceId)).toEqual([
+      '70010000000001',
+      '70010000000002'
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('counts duplicate directory ids once while retaining first-seen trackable output', async () => {
+    const first = rawItem(1, { title: 'First title' });
+    const duplicateDirectoryRow = rawItem(1, { title: 'Later title' });
+    const { client } = clientForPages([
+      page(2, [first]),
+      page(2, [duplicateDirectoryRow, rawItem(2)])
+    ]);
+
+    const result = await client.fetchAll();
+
+    expect(result.map((item) => [item.sourceId, item.title])).toEqual([
+      ['70010000000001', 'First title'],
+      ['70010000000002', 'Synthetic Item 2']
     ]);
   });
 
