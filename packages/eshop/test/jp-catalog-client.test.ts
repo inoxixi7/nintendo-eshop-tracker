@@ -56,7 +56,30 @@ function expectInvalidPayload(error: unknown): asserts error is EshopError {
   expect(error).toMatchObject({ code: 'INVALID_PAYLOAD', country: 'JP' });
 }
 
+function expectPaginationError(error: unknown, causeMessage: string): asserts error is EshopError {
+  expectInvalidPayload(error);
+  expect(error.cause).toBeInstanceOf(Error);
+  expect((error.cause as Error).message).toBe(causeMessage);
+}
+
 describe('JapanCatalogClient.fetchPage', () => {
+  it.each([
+    ['zero', 0],
+    ['negative', -1],
+    ['fractional', 1.5],
+    ['NaN', Number.NaN],
+    ['positive infinity', Number.POSITIVE_INFINITY],
+    ['unsafe integer', Number.MAX_SAFE_INTEGER + 1]
+  ])('rejects a %s page before calling fetch', async (_label, invalidPage) => {
+    const fetch = vi.fn<FetchLike>(async () => jsonResponse(page(0, [])));
+    const client = new JapanCatalogClient({ fetch });
+
+    const error = await rejectionFrom(() => client.fetchPage(invalidPage));
+
+    expectPaginationError(error, 'Japanese catalog page must be a positive safe integer');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('requests the exact Nintendo JP search URL and passes through the signal identity', async () => {
     const payload = page(1, [rawItem(1)]);
     const signal = new AbortController().signal;
@@ -139,7 +162,8 @@ describe('JapanCatalogClient.fetchPage', () => {
 describe('JapanCatalogClient.fetchAll', () => {
   it('fetches pages sequentially and returns normalized first-seen order', async () => {
     const responses = [
-      page(3, [rawItem(1), rawItem(2)]),
+      page(3, [rawItem(1)]),
+      page(3, [rawItem(2)]),
       page(3, [rawItem(3)])
     ];
     const requestedPages: string[] = [];
@@ -148,11 +172,12 @@ describe('JapanCatalogClient.fetchAll', () => {
     let maximumActive = 0;
     const fetch: FetchLike = async (input) => {
       active += 1;
+      if (active > 1) throw new Error('catalog pages overlapped');
       maximumActive = Math.max(maximumActive, active);
       requestedPages.push((input as URL).searchParams.get('page') ?? 'missing');
       const response = responses[nextResponse];
       nextResponse += 1;
-      await Promise.resolve();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
       active -= 1;
       if (response === undefined) throw new Error('unexpected page request');
       return jsonResponse(response);
@@ -166,7 +191,7 @@ describe('JapanCatalogClient.fetchAll', () => {
       '70010000000002',
       '70010000000003'
     ]);
-    expect(requestedPages).toEqual(['1', '2']);
+    expect(requestedPages).toEqual(['1', '2', '3']);
     expect(maximumActive).toBe(1);
     expect(result).toEqual(result.map((item) => CatalogItemSchema.parse(item)));
     expect(result.every((item) => item.country === 'JP')).toBe(true);
@@ -216,7 +241,10 @@ describe('JapanCatalogClient.fetchAll', () => {
       page(4, [rawItem(3), rawItem(4)])
     ]);
 
-    expectInvalidPayload(await rejectionFrom(() => client.fetchAll()));
+    expectPaginationError(
+      await rejectionFrom(() => client.fetchAll()),
+      'Japanese catalog total changed during pagination'
+    );
   });
 
   it('rejects an identical page signature before completion', async () => {
@@ -225,7 +253,10 @@ describe('JapanCatalogClient.fetchAll', () => {
       page(3, [rawItem(1), rawItem(2)])
     ]);
 
-    expectInvalidPayload(await rejectionFrom(() => client.fetchAll()));
+    expectPaginationError(
+      await rejectionFrom(() => client.fetchAll()),
+      'Japanese catalog page signature repeated before completion'
+    );
   });
 
   it('rejects a non-identical page that makes zero unique progress', async () => {
@@ -234,7 +265,10 @@ describe('JapanCatalogClient.fetchAll', () => {
       page(3, [rawItem(2), rawItem(1), rawItem(2)])
     ]);
 
-    expectInvalidPayload(await rejectionFrom(() => client.fetchAll()));
+    expectPaginationError(
+      await rejectionFrom(() => client.fetchAll()),
+      'Japanese catalog page made no unique progress'
+    );
   });
 
   it('rejects an empty page before the expected total is reached', async () => {
@@ -243,7 +277,10 @@ describe('JapanCatalogClient.fetchAll', () => {
       page(2, [])
     ]);
 
-    expectInvalidPayload(await rejectionFrom(() => client.fetchAll()));
+    expectPaginationError(
+      await rejectionFrom(() => client.fetchAll()),
+      'Japanese catalog page made no unique progress'
+    );
   });
 
   it('rejects when unique items overshoot the page-one total', async () => {
@@ -251,7 +288,10 @@ describe('JapanCatalogClient.fetchAll', () => {
       page(1, [rawItem(1), rawItem(2)])
     ]);
 
-    expectInvalidPayload(await rejectionFrom(() => client.fetchAll()));
+    expectPaginationError(
+      await rejectionFrom(() => client.fetchAll()),
+      'Japanese catalog unique item count exceeded total'
+    );
   });
 
   it('wraps normalizer failures without leaking the raw payload', async () => {

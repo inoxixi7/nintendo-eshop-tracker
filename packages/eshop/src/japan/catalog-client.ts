@@ -31,6 +31,10 @@ export class JapanCatalogClient {
   constructor(private readonly options: JapanCatalogClientOptions) {}
 
   async fetchPage(page: number, signal?: AbortSignal): Promise<JapanCatalogPage> {
+    if (!Number.isSafeInteger(page) || page < 1) {
+      throw invalidPayload(new Error('Japanese catalog page must be a positive safe integer'));
+    }
+
     const url = new URL(CATALOG_URL);
     url.searchParams.set('opt_hard', '1_HAC');
     url.searchParams.set('limit', '400');
