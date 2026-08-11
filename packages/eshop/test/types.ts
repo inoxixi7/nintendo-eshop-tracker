@@ -1,4 +1,10 @@
-import type { EshopAdapter, EshopErrorOptions, PriceFetchResult } from '../src/index.js';
+import { createJapanEshopAdapter } from '../src/index.js';
+import type {
+  EshopAdapter,
+  EshopErrorOptions,
+  JapanEshopAdapterOptions,
+  PriceFetchResult
+} from '../src/index.js';
 
 declare const adapter: EshopAdapter;
 declare const signal: AbortSignal;
@@ -9,6 +15,24 @@ adapter.fetchPrices(sourceIds);
 const result: Promise<PriceFetchResult> = adapter.fetchPrices(sourceIds, signal);
 
 void result;
+
+const japanAdapter: EshopAdapter = createJapanEshopAdapter();
+const injectedAdapter: EshopAdapter = createJapanEshopAdapter({
+  fetch: globalThis.fetch,
+  now: () => new Date('2026-08-11T00:00:00Z')
+});
+const readonlyOptions: Readonly<JapanEshopAdapterOptions> = {
+  fetch: globalThis.fetch,
+  now: () => new Date('2026-08-11T00:00:00Z')
+};
+const readonlyOptionsAdapter: EshopAdapter = createJapanEshopAdapter(readonlyOptions);
+
+// @ts-expect-error The public factory only accepts dependency injection options.
+createJapanEshopAdapter({ country: 'JP' });
+
+void japanAdapter;
+void injectedAdapter;
+void readonlyOptionsAdapter;
 
 const upstreamHttpError: EshopErrorOptions = {
   code: 'UPSTREAM_HTTP',
