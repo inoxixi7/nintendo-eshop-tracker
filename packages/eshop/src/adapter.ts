@@ -1,8 +1,5 @@
-import type {
-  CatalogItem,
-  CountryCode,
-  PriceObservation
-} from '@eshop-tracker/shared';
+import type { CatalogItem, CountryCode } from '@eshop-tracker/shared';
+import type { PriceFetchResult } from './price-fetch-result.js';
 
 export interface EshopAdapter {
   readonly country: CountryCode;
@@ -17,5 +14,5 @@ export interface EshopAdapter {
    * If the supplied signal cancels the request, propagate its reason or AbortError unchanged.
    * Do not wrap cancellation in a NETWORK EshopError.
    */
-  fetchPrices(sourceIds: readonly string[], signal?: AbortSignal): Promise<PriceObservation[]>;
+  fetchPrices(sourceIds: readonly string[], signal?: AbortSignal): Promise<PriceFetchResult>;
 }

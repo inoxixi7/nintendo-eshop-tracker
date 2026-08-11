@@ -1,11 +1,13 @@
-import type { EshopAdapter, EshopErrorOptions } from '../src/index.js';
+import type { EshopAdapter, EshopErrorOptions, PriceFetchResult } from '../src/index.js';
 
 declare const adapter: EshopAdapter;
 declare const signal: AbortSignal;
 declare const sourceIds: readonly ['70010000000141', '70010000000185'];
 
 adapter.fetchCatalog(signal);
-adapter.fetchPrices(sourceIds, signal);
+const result: Promise<PriceFetchResult> = adapter.fetchPrices(sourceIds, signal);
+
+void result;
 
 const upstreamHttpError: EshopErrorOptions = {
   code: 'UPSTREAM_HTTP',
