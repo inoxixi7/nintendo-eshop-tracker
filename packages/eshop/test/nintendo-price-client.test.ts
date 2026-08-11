@@ -122,6 +122,7 @@ describe('NintendoPriceClient input and requests', () => {
     ['trailing whitespace', '7001000000001 '],
     ['query text', '70010000000001?x'],
     ['path text', '70010000000001/x'],
+    ['leading zero', '00000000000001'],
     ['13 digits', '7001000000001'],
     ['15 digits', '700100000000001'],
     ['non-ASCII digits', '７００１０００００００００１']

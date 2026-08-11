@@ -16,7 +16,7 @@ export interface NintendoPriceClientOptions {
 
 const PRICE_URL = 'https://api.ec.nintendo.com/v1/price';
 const MAX_BATCH_SIZE = 50;
-const NINTENDO_SOURCE_ID = /^\d{14}$/;
+const CANONICAL_NINTENDO_SOURCE_ID = /^[1-9]\d{13}$/;
 
 function invalidPayload(cause: unknown): EshopError {
   return new EshopError({
@@ -31,11 +31,11 @@ function reconcileResponse(
   response: NintendoPriceResponse,
   requestedSourceIds: readonly string[]
 ): void {
-  const requested = new Set(requestedSourceIds);
-  const received = new Set<string>();
+  const requested = new Set(requestedSourceIds.map(Number));
+  const received = new Set<number>();
 
   for (const price of response.prices) {
-    const sourceId = String(price.title_id);
+    const sourceId = price.title_id;
 
     if (!requested.has(sourceId)) {
       throw new Error('Nintendo price response contained an unexpected source ID');
@@ -48,7 +48,7 @@ function reconcileResponse(
   }
 
   for (const sourceId of requestedSourceIds) {
-    if (!received.has(sourceId)) {
+    if (!received.has(Number(sourceId))) {
       throw new Error('Nintendo price response omitted a requested source ID');
     }
   }
@@ -65,8 +65,7 @@ export class NintendoPriceClient {
     const seenInput = new Set<string>();
 
     for (const sourceId of sourceIds) {
-      const numericSourceId = Number(sourceId);
-      if (!NINTENDO_SOURCE_ID.test(sourceId) || !Number.isSafeInteger(numericSourceId)) {
+      if (!CANONICAL_NINTENDO_SOURCE_ID.test(sourceId)) {
         throw invalidPayload(
           new Error('Nintendo price source ID must be a 14-digit integer')
         );
