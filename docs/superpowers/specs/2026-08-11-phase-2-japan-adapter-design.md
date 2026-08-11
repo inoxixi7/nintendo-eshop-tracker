@@ -15,6 +15,7 @@ This phase proves the live data boundary only. It does not add PostgreSQL, sched
 - The legacy Japanese Switch XML and `nintendo-switch-eshop` are research references, not runtime dependencies.
 - Ordinary tests use fixed fixtures and never require Nintendo to be online.
 - A separate manual live smoke test checks a small current sample.
+- Search-only rows with an explicit null NSUID count toward catalog pagination but do not produce price-addressable `CatalogItem` output.
 - Persistence remains the responsibility of the next database and Worker phase.
 - For the JP adapter, this spec supersedes the earlier general design's reference to a fixed JP XML fixture; fixtures now come from the current search JSON and price JSON formats.
 
@@ -37,6 +38,7 @@ Confirmed behavior:
 - `limit=100` with `page=1` and `page=2` returns distinct pages.
 - Requesting `limit=1000` is capped by the server at 400 items, so the adapter uses 400.
 - The response currently contains roughly 28,000 products and includes 2026 releases.
+- A 2026-08-11 live smoke found Virtual Boy search rows with a null NSUID and a root-relative image path. These are valid directory rows but are not addressable through the current NSUID price flow.
 - `opt_sale_flg=1` returns current sale products and exposes useful diagnostic price fields, but those directory prices are not authoritative.
 
 ### Legacy Japanese XML
@@ -94,15 +96,17 @@ Network transport and time are injected through narrow options (`fetch` and `now
 `fetchCatalog(signal?)` performs these steps:
 
 1. Request page 1 with `opt_hard=1_HAC`, `limit=400`, and `sort=hdate desc`, matching the probed endpoint behavior.
-2. Validate the response envelope and every item using internal Zod schemas that permit unknown additive fields.
-3. Capture `result.total` and continue requesting sequential page numbers.
+2. Validate the response envelope and every directory row using internal Zod schemas that permit unknown additive fields. Every row must have a nonblank directory `id`.
+3. Capture `result.total`, which counts directory rows, and continue requesting sequential page numbers.
 4. Require every page in the same run to report the same total.
-5. Normalize items and deduplicate by NSUID.
-6. Reject repeated pages or a page that makes no unique progress.
-7. Stop only when the unique item count equals the reported total.
-8. Run `validateCatalogBatch(result, 'JP')` before returning.
+5. Build a collision-free page signature from its directory IDs and reject repeated pages.
+6. Track unique directory IDs for pagination deduplication, progress, and completeness. Reject a page that adds no directory ID or makes the unique directory count exceed the reported total.
+7. Normalize every trackable occurrence whose NSUID is non-null, retaining the first normalized item for each NSUID. An explicit `nsuid: null` row counts toward directory completeness but produces no `CatalogItem`.
+8. Stop only when the unique directory ID count equals the reported total, then run `validateCatalogBatch(result, 'JP')` before returning.
 
-The method never returns a partial catalog. If the upstream catalog changes during a crawl and the totals or unique count no longer agree, it throws `INVALID_PAYLOAD`; a later Worker retry starts a fresh run.
+The returned `CatalogItem` count can be lower than `result.total` because the directory total includes search-only rows without an NSUID. Directory identity and output identity remain separate: pagination is complete by unique directory ID, while output is deduplicated by first-seen NSUID.
+
+The method never returns a partial catalog. If the upstream catalog changes during a crawl and the totals or unique directory count no longer agree, or a page repeats or makes no directory progress, it throws `INVALID_PAYLOAD`; a later Worker retry starts a fresh run.
 
 The catalog requests run sequentially. There is no adapter-level retry, caching, or disk output.
 
@@ -112,7 +116,7 @@ The catalog requests run sequentially. There is no adapter-level retry, caching,
 |---|---|
 | `country` | constant `JP` |
 | `source` | constant `nintendo-jp-search` |
-| `sourceId` | `nsuid` |
+| `sourceId` | non-null `nsuid` from a trackable row |
 | `productCode` | `icode`, otherwise `null` |
 | `title` | `title` |
 | `publisher` | `maker`, otherwise `null` |
@@ -130,7 +134,7 @@ Product type mapping is conservative:
 - known Switch software forms become `game`;
 - any new or ambiguous form becomes `unknown` rather than being guessed.
 
-Unknown upstream fields do not break the adapter. Missing or invalid identity fields such as NSUID or title reject the page. Directory price fields remain only in `sourcePayload` and never produce `PriceObservation` values.
+Unknown upstream fields do not break the adapter. An explicit `nsuid: null` is a valid search-only entry, but the current domain cannot price-address it, so it is not emitted as a `CatalogItem`. A missing NSUID, an invalid non-null NSUID, a missing or blank directory ID, or an invalid title, image hash, or release date on a trackable row rejects the page. Root-relative image paths observed on search-only rows are not interpreted as catalog image hashes. Directory price fields remain only in trackable `sourcePayload` values and never produce `PriceObservation` values.
 
 ## 7. Price result contract
 
@@ -190,6 +194,7 @@ Errors do not include a full upstream response in their public message. Fixed fi
 Fixed, reduced fixtures cover:
 
 - one base game, one bundle, one DLC, and one unknown product form;
+- a live-shaped search-only row with a null NSUID and root-relative image path, which is skipped without weakening trackable-row validation;
 - a normal price, discounted price, unreleased price, and `not_found` result;
 - localized display strings that prove only `raw_value` is parsed;
 - additive unknown fields;
@@ -198,7 +203,8 @@ Fixed, reduced fixtures cover:
 Injected fetch responses cover:
 
 - multiple catalog pages and the server's 400-item page size;
-- total changes, repeated pages, no-progress pages, duplicates, and incomplete totals;
+- directory-ID completeness, deduplication, overshoot, collision-free page signatures, and null-row skip semantics;
+- total changes, repeated pages, no-progress pages, trackable NSUID duplicates, and incomplete totals;
 - empty price input, input deduplication, 50-item batching, and cross-batch aggregation;
 - missing price IDs, HTTP failures, transport failures, and abort propagation;
 - immutability of caller-owned input arrays.
@@ -244,8 +250,9 @@ The API will later read PostgreSQL only. Nintendo downtime therefore does not di
 
 - `JapanEshopAdapter` conforms to the revised `EshopAdapter` interface.
 - Catalog fixtures normalize game, bundle, DLC, and unknown products correctly.
+- Live-shaped null-NSUID directory rows count toward completeness and are skipped from `CatalogItem` output.
 - Price fixtures distinguish normal, discounted, unreleased, and unavailable entries.
-- Catalog pagination, uniqueness, completeness, and no-progress behavior are tested.
+- Catalog pagination tests cover directory-ID uniqueness, completeness, collision-free signatures, overshoot, null-row skipping, and no-progress behavior.
 - Price deduplication, 50-ID batching, reconciliation, and exact decimal conversion are tested.
 - All errors follow the defined `EshopError` and abort semantics.
 - Package exports and generated declarations work for an external consumer.
