@@ -14,6 +14,14 @@ function isAbortError(value: unknown): boolean {
   return value instanceof DOMException && value.name === 'AbortError';
 }
 
+function rethrowCancellation(cause: unknown, signal?: AbortSignal): void {
+  if (signal?.aborted === true) {
+    const reason = signal.reason;
+    throw reason === undefined ? cause : reason;
+  }
+  if (isAbortError(cause)) throw cause;
+}
+
 export async function requestJson(options: RequestJsonOptions): Promise<unknown> {
   let response: Response;
 
@@ -21,11 +29,7 @@ export async function requestJson(options: RequestJsonOptions): Promise<unknown>
     const init = options.signal === undefined ? undefined : { signal: options.signal };
     response = await options.fetch(options.url, init);
   } catch (cause) {
-    if (options.signal?.aborted === true) {
-      const reason = options.signal.reason;
-      throw reason === undefined ? cause : reason;
-    }
-    if (isAbortError(cause)) throw cause;
+    rethrowCancellation(cause, options.signal);
 
     throw new EshopError({
       code: 'NETWORK',
@@ -47,6 +51,8 @@ export async function requestJson(options: RequestJsonOptions): Promise<unknown>
   try {
     return await response.json();
   } catch (cause) {
+    rethrowCancellation(cause, options.signal);
+
     throw new EshopError({
       code: 'INVALID_PAYLOAD',
       message: 'Nintendo eShop returned invalid JSON',
