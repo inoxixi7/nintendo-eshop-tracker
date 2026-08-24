@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./dist/sync.js",
-  "types": "./dist/sync.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/sync.d.ts",
-      "import": "./dist/sync.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "files": ["dist"],

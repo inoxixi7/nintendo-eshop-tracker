@@ -21,8 +21,73 @@ describe('withRetry', () => {
     })).resolves.toBe('catalog');
 
     expect(operation).toHaveBeenCalledTimes(3);
-    expect(sleep).toHaveBeenNthCalledWith(1, 1_000);
-    expect(sleep).toHaveBeenNthCalledWith(2, 2_000);
+    expect(sleep).toHaveBeenNthCalledWith(1, 1_000, undefined);
+    expect(sleep).toHaveBeenNthCalledWith(2, 2_000, undefined);
+  });
+
+  it('uses both inclusive jitter endpoints without negative bias', async () => {
+    const error = new EshopError({ code: 'NETWORK', message: 'offline', country: 'JP' });
+    const lowSleep = vi.fn(async () => undefined);
+    await expect(withRetry(vi.fn().mockRejectedValueOnce(error).mockResolvedValue('low'), {
+      baseDelayMs: 100, maxDelayMs: 200, jitterMs: 10, sleep: lowSleep, random: () => 0
+    })).resolves.toBe('low');
+    expect(lowSleep).toHaveBeenCalledWith(90, undefined);
+
+    const highSleep = vi.fn(async () => undefined);
+    await expect(withRetry(vi.fn().mockRejectedValueOnce(error).mockResolvedValue('high'), {
+      baseDelayMs: 100, maxDelayMs: 200, jitterMs: 10, sleep: highSleep,
+      random: () => 1 - Number.EPSILON
+    })).resolves.toBe('high');
+    expect(highSleep).toHaveBeenCalledWith(110, undefined);
+  });
+
+  it('stops before an attempt when its signal was already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const operation = vi.fn(async () => 'unexpected');
+
+    await expect(withRetry(operation, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(operation).not.toHaveBeenCalled();
+  });
+
+  it('stops during injected backoff without another attempt', async () => {
+    const controller = new AbortController();
+    const reason = new Error('stop during backoff');
+    const operation = vi.fn().mockRejectedValue(new EshopError({ code: 'NETWORK', message: 'offline', country: 'JP' }));
+    const sleep = vi.fn(async (_delayMs: number, signal?: AbortSignal) => {
+      controller.abort(reason);
+      expect(signal).toBe(controller.signal);
+    });
+
+    await expect(withRetry(operation, { signal: controller.signal, sleep })).rejects.toBe(reason);
+    expect(operation).toHaveBeenCalledOnce();
+    expect(sleep).toHaveBeenCalledOnce();
+  });
+
+  it('interrupts the default backoff sleep immediately on abort', async () => {
+    const controller = new AbortController();
+    const reason = new Error('stop default backoff');
+    const operation = vi.fn(async () => {
+      setTimeout(() => controller.abort(reason), 0);
+      throw new EshopError({ code: 'NETWORK', message: 'offline', country: 'JP' });
+    });
+
+    await expect(withRetry(operation, {
+      signal: controller.signal, baseDelayMs: 10_000, jitterMs: 0
+    })).rejects.toBe(reason);
+    expect(operation).toHaveBeenCalledOnce();
+  });
+
+  it('does not retry an abort reason even when it is retryable-looking', async () => {
+    const controller = new AbortController();
+    const reason = new EshopError({ code: 'NETWORK', message: 'cancelled', country: 'JP' });
+    const operation = vi.fn(async () => {
+      controller.abort(reason);
+      throw reason;
+    });
+
+    await expect(withRetry(operation, { signal: controller.signal, sleep: async () => undefined })).rejects.toBe(reason);
+    expect(operation).toHaveBeenCalledOnce();
   });
 
   it.each([

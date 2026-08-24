@@ -13,6 +13,7 @@ export interface SyncOptions {
   priceSource: string;
   now: () => Date;
   retry?: RetryOptions;
+  signal?: AbortSignal;
 }
 
 export interface SyncSummary {
@@ -27,6 +28,11 @@ type CompletedSync = Omit<SyncSummary, 'jobType' | 'country' | 'status'> & {
   status: 'success' | 'partial';
   result: SyncRunResult;
 };
+
+interface SyncProgress {
+  itemsRead: number;
+  itemsWritten: number;
+}
 
 const FAILURE_CODE = 'SYNC_FAILURE';
 const PARTIAL_CODE = 'UNAVAILABLE_LISTINGS';
@@ -136,10 +142,16 @@ function mapObservationsToListingSource(
   return observations.map((observation) => ({ ...observation, source: listingSource }));
 }
 
+function retryOptions(options: SyncOptions): RetryOptions | undefined {
+  return options.signal === undefined
+    ? options.retry
+    : { ...options.retry, signal: options.signal };
+}
+
 async function runSync(
   jobType: JobType,
   options: SyncOptions,
-  execute: (startedAt: Date) => Promise<CompletedSync>
+  execute: (startedAt: Date, progress: SyncProgress) => Promise<CompletedSync>
 ): Promise<SyncSummary> {
   assertSource(options.listingSource, 'listingSource');
   assertSource(options.priceSource, 'priceSource');
@@ -154,12 +166,13 @@ async function runSync(
   let summary: SyncSummary | undefined;
   let primaryError: unknown;
   let hasPrimaryError = false;
+  const progress: SyncProgress = { itemsRead: 0, itemsWritten: 0 };
   try {
     try {
       // One timestamp makes the catalog batch's last_seen_at and run start auditable together.
       const startedAt = readNow(options.now);
       runId = await repository.startSyncRun(jobType, country, startedAt);
-      const completed = await execute(startedAt);
+      const completed = await execute(startedAt, progress);
       await repository.finishSyncRun(runId, completed.result);
       summary = { jobType, country, status: completed.status, itemsRead: completed.itemsRead, itemsWritten: completed.itemsWritten };
     } catch (error) {
@@ -169,8 +182,8 @@ async function runSync(
         try {
           await repository.finishSyncRun(runId, {
             status: 'failed',
-            itemsRead: 0,
-            itemsWritten: 0,
+            itemsRead: progress.itemsRead,
+            itemsWritten: progress.itemsWritten,
             ...sanitizedFailure(error)
           });
         } catch {
@@ -199,12 +212,14 @@ async function runSync(
 }
 
 export function runCatalogSync(options: SyncOptions): Promise<SyncSummary> {
-  return runSync('catalog', options, async (startedAt) => {
-    const items = await withRetry(() => options.adapter.fetchCatalog(), options.retry);
+  return runSync('catalog', options, async (startedAt, progress) => {
+    const items = await withRetry(() => options.adapter.fetchCatalog(options.signal), retryOptions(options));
+    progress.itemsRead = items.length;
     if (items.some((item) => item.country !== options.adapter.country || item.source !== options.listingSource)) {
       throw new Error('Catalog fetch result does not match the configured listing source');
     }
     const itemsWritten = await options.repository.upsertCatalog(items, startedAt);
+    progress.itemsWritten = itemsWritten;
     return {
       status: 'success',
       itemsRead: items.length,
@@ -215,7 +230,7 @@ export function runCatalogSync(options: SyncOptions): Promise<SyncSummary> {
 }
 
 export function runPriceSync(options: SyncOptions): Promise<SyncSummary> {
-  return runSync('prices', options, async () => {
+  return runSync('prices', options, async (_startedAt, progress) => {
     const sourceIds = await options.repository.activeSourceIds(options.adapter.country, options.listingSource);
     if (sourceIds.length === 0) {
       return {
@@ -226,11 +241,16 @@ export function runPriceSync(options: SyncOptions): Promise<SyncSummary> {
       };
     }
 
-    const result = await withRetry(() => options.adapter.fetchPrices(sourceIds), options.retry);
+    const result = await withRetry(
+      () => options.adapter.fetchPrices(sourceIds, options.signal),
+      retryOptions(options)
+    );
+    progress.itemsRead = sourceIds.length;
     const observations = validatePriceResult(result, sourceIds, options.adapter.country, options.priceSource);
     const itemsWritten = await options.repository.recordPrices(
       mapObservationsToListingSource(observations, options.listingSource)
     );
+    progress.itemsWritten = itemsWritten;
     const status = result.unavailableSourceIds.length > 0 ? 'partial' : 'success';
     const accounting: SyncRunResult = status === 'partial'
       ? {

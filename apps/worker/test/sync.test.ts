@@ -70,6 +70,19 @@ describe('synchronization jobs', () => {
       .toBeGreaterThan(vi.mocked(repository.finishSyncRun).mock.invocationCallOrder[0] ?? 0);
   });
 
+  it('passes an optional abort signal to both upstream adapter calls', async () => {
+    const controller = new AbortController();
+    const catalogRepository = createRepository();
+    const priceRepository = createRepository();
+    const adapter = createAdapter();
+
+    await runCatalogSync({ ...options(adapter, catalogRepository), signal: controller.signal });
+    await runPriceSync({ ...options(adapter, priceRepository), signal: controller.signal });
+
+    expect(adapter.fetchCatalog).toHaveBeenCalledWith(controller.signal);
+    expect(adapter.fetchPrices).toHaveBeenCalledWith(['70010000000001'], controller.signal);
+  });
+
   it('records available prices and marks unavailable listings partial without exposing IDs', async () => {
     const repository = createRepository({ activeSourceIds: vi.fn(async () => ['70010000000001', '70010000000002']) });
     const adapter = createAdapter({
@@ -81,7 +94,7 @@ describe('synchronization jobs', () => {
     });
 
     expect(repository.activeSourceIds).toHaveBeenCalledWith('JP', 'nintendo-jp-search');
-    expect(adapter.fetchPrices).toHaveBeenCalledWith(['70010000000001', '70010000000002']);
+    expect(adapter.fetchPrices).toHaveBeenCalledWith(['70010000000001', '70010000000002'], undefined);
     expect(repository.recordPrices).toHaveBeenCalledWith([{ ...observation, source: 'nintendo-jp-search' }]);
     expect(repository.finishSyncRun).toHaveBeenCalledWith(17, {
       status: 'partial', itemsRead: 2, itemsWritten: 1,
@@ -227,6 +240,62 @@ describe('synchronization jobs', () => {
     expect(adapter.fetchCatalog).toHaveBeenCalledOnce();
     expect(repository.upsertCatalog).toHaveBeenCalledOnce();
     expect(repository.releaseJobLock).toHaveBeenCalledOnce();
+  });
+
+  it('accounts for catalog items read when catalog persistence fails', async () => {
+    const writeError = new Error('catalog write failed');
+    const repository = createRepository({ upsertCatalog: vi.fn(async () => { throw writeError; }) });
+    const adapter = createAdapter();
+
+    await expect(runCatalogSync(options(adapter, repository))).rejects.toBe(writeError);
+
+    expect(repository.finishSyncRun).toHaveBeenCalledWith(17, expect.objectContaining({
+      status: 'failed', itemsRead: 1, itemsWritten: 0
+    }));
+  });
+
+  it('accounts for price items read when price persistence fails', async () => {
+    const writeError = new Error('price write failed');
+    const repository = createRepository({ recordPrices: vi.fn(async () => { throw writeError; }) });
+    const adapter = createAdapter();
+
+    await expect(runPriceSync(options(adapter, repository))).rejects.toBe(writeError);
+
+    expect(repository.finishSyncRun).toHaveBeenCalledWith(17, expect.objectContaining({
+      status: 'failed', itemsRead: 1, itemsWritten: 0
+    }));
+  });
+
+  it('uses completed catalog counts when success finalization fails', async () => {
+    const finalizationError = new Error('catalog finalization failed');
+    const repository = createRepository({
+      finishSyncRun: vi.fn(async (_id, result) => {
+        if (result.status === 'success') throw finalizationError;
+      })
+    });
+    const adapter = createAdapter();
+
+    await expect(runCatalogSync(options(adapter, repository))).rejects.toBe(finalizationError);
+
+    expect(repository.finishSyncRun).toHaveBeenLastCalledWith(17, expect.objectContaining({
+      status: 'failed', itemsRead: 1, itemsWritten: 1
+    }));
+  });
+
+  it('uses completed price counts when success finalization fails', async () => {
+    const finalizationError = new Error('price finalization failed');
+    const repository = createRepository({
+      finishSyncRun: vi.fn(async (_id, result) => {
+        if (result.status === 'success') throw finalizationError;
+      })
+    });
+    const adapter = createAdapter();
+
+    await expect(runPriceSync(options(adapter, repository))).rejects.toBe(finalizationError);
+
+    expect(repository.finishSyncRun).toHaveBeenLastCalledWith(17, expect.objectContaining({
+      status: 'failed', itemsRead: 1, itemsWritten: 1
+    }));
   });
 
   it('does not retry a repository active-listing read failure', async () => {
