@@ -86,6 +86,7 @@ rsync -a --delete \
   --exclude 'node_modules/' --exclude '**/node_modules/***' \
   --exclude 'dist/' --exclude '**/dist/***' \
   --exclude 'coverage/' --exclude '**/coverage/***' \
+  --include '.env.example' \
   --exclude '.env' --exclude '.env.*' \
   --exclude '*.log' --exclude 'logs/' --exclude '**/logs/***' \
   --exclude 'data/' --exclude '**/data/***' \
