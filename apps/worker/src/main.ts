@@ -60,37 +60,46 @@ function syncOptions(adapter: EshopAdapter, repository: TrackerRepository): Omit
   };
 }
 
+const noop = (): void => undefined;
+
 export async function runWorkerCommand(args: readonly string[], dependencies: WorkerMainDependencies = {}): Promise<void> {
   const command = commandFrom(args);
   const services = runtime(dependencies);
   const config = parseWorkerConfig(services.env);
   const repository = services.createRepository(config.databaseUrl);
-  const adapter = services.createAdapter();
-  const options = syncOptions(adapter, repository);
-
-  if (command === 'schedule') {
-    try {
-      await repository.migrate();
-    } catch (error) {
-      await repository.close();
-      throw error;
-    }
-    const scheduler = services.createScheduler({
-      config,
-      ...options,
-      runCatalogSync: services.runCatalogSync,
-      runPriceSync: services.runPriceSync
-    });
-    await scheduler.start();
-    return;
-  }
+  let repositoryCloseAttempted = false;
+  let scheduler: WorkerScheduler | undefined;
+  const closeRepository = async (): Promise<void> => {
+    if (repositoryCloseAttempted) return;
+    repositoryCloseAttempted = true;
+    await repository.close();
+  };
 
   try {
+    const adapter = services.createAdapter();
+    const options = syncOptions(adapter, repository);
     await repository.migrate();
+    if (command === 'schedule') {
+      scheduler = services.createScheduler({
+        config,
+        ...options,
+        runCatalogSync: services.runCatalogSync,
+        runPriceSync: services.runPriceSync
+      });
+      await scheduler.start();
+      await scheduler.waitForShutdown();
+      return;
+    }
     if (command === 'catalog' || command === 'all') await services.runCatalogSync(options);
     if (command === 'prices' || command === 'all') await services.runPriceSync(options);
-  } finally {
-    await repository.close();
+    await closeRepository();
+  } catch (error) {
+    if (scheduler !== undefined) {
+      await scheduler.shutdown().catch(noop);
+    } else {
+      await closeRepository().catch(noop);
+    }
+    throw error;
   }
 }
 

@@ -41,7 +41,14 @@ export interface WorkerSchedulerOptions {
 export interface WorkerScheduler {
   start(): Promise<void>;
   shutdown(): Promise<void>;
+  waitForShutdown(): Promise<void>;
 }
+
+type ResolvedSchedulerOptions = Omit<WorkerSchedulerOptions,
+  'cronFactory' | 'signals' | 'reportFailure' | 'reportInfo' | 'runCatalogSync' | 'runPriceSync'
+> & Required<Pick<WorkerSchedulerOptions,
+  'cronFactory' | 'signals' | 'reportFailure' | 'reportInfo' | 'runCatalogSync' | 'runPriceSync'
+>>;
 
 const defaultCronFactory: CronFactory = (expression, options, callback) => new Cron(expression, options, callback);
 const defaultSignals: SignalRegistrar = {
@@ -55,21 +62,29 @@ class DurableWorkerScheduler implements WorkerScheduler {
   private readonly active = new Set<Promise<void>>();
   private readonly running = new Set<JobName>();
   private readonly handles: CronHandle[] = [];
+  private readonly done: Promise<void>;
+  private resolveDone!: () => void;
+  private rejectDone!: (error: unknown) => void;
   private accepting = true;
-  private started = false;
+  private schedulesInstalled = false;
+  private signalsInstalled = false;
   private startPromise: Promise<void> | undefined;
   private shutdownPromise: Promise<void> | undefined;
-  private signalsInstalled = false;
   private readonly signalListener = (): void => {
     void this.shutdown().catch(() => {
       this.options.reportFailure('Worker shutdown failed');
     });
   };
 
-  public constructor(private readonly options: Required<Pick<WorkerSchedulerOptions,
-    'config' | 'repository' | 'adapter' | 'listingSource' | 'priceSource' | 'now' | 'cronFactory' | 'signals' | 'reportFailure' | 'runCatalogSync' | 'runPriceSync'
-    | 'reportInfo'
-  >>) {}
+  public constructor(private readonly options: ResolvedSchedulerOptions) {
+    this.done = new Promise<void>((resolve, reject) => {
+      this.resolveDone = resolve;
+      this.rejectDone = reject;
+    });
+    // A signal can arrive before the CLI begins waiting. Keep that failure
+    // observable to later waiters without an unhandled rejection.
+    void this.done.catch(noop);
+  }
 
   public start(): Promise<void> {
     if (this.startPromise !== undefined) return this.startPromise;
@@ -80,26 +95,46 @@ class DurableWorkerScheduler implements WorkerScheduler {
   public shutdown(): Promise<void> {
     if (this.shutdownPromise !== undefined) return this.shutdownPromise;
     this.shutdownPromise = this.stop();
+    void this.shutdownPromise.then(this.resolveDone, this.rejectDone);
     return this.shutdownPromise;
   }
 
-  private async initialize(): Promise<void> {
-    try {
-      this.installSchedules();
-      if (!this.options.config.runOnStartup) return;
+  public waitForShutdown(): Promise<void> {
+    return this.done;
+  }
 
-      await this.run('catalog');
-      if (!this.accepting) return;
-      await this.run('prices');
+  private async initialize(): Promise<void> {
+    if (!this.accepting) return;
+    try {
+      this.installSignals();
+      if (this.options.config.runOnStartup) {
+        await this.run('catalog');
+        if (!this.accepting) return;
+        await this.run('prices');
+        if (!this.accepting) return;
+      }
+      this.installSchedules();
     } catch (error) {
-      await this.shutdown();
+      await this.shutdown().catch(noop);
+      throw error;
+    }
+  }
+
+  private installSignals(): void {
+    if (this.signalsInstalled) return;
+    this.signalsInstalled = true;
+    try {
+      this.options.signals.on('SIGINT', this.signalListener);
+      this.options.signals.on('SIGTERM', this.signalListener);
+    } catch (error) {
+      this.removeSignals();
       throw error;
     }
   }
 
   private installSchedules(): void {
-    if (this.started) return;
-    this.started = true;
+    if (!this.accepting || this.schedulesInstalled) return;
+    this.schedulesInstalled = true;
     try {
       this.handles.push(this.options.cronFactory(
         this.options.config.catalogCron,
@@ -111,18 +146,8 @@ class DurableWorkerScheduler implements WorkerScheduler {
         { timezone: this.options.config.timeZone },
         () => { this.runScheduled('prices'); }
       ));
-      this.signalsInstalled = true;
-      this.options.signals.on('SIGINT', this.signalListener);
-      this.options.signals.on('SIGTERM', this.signalListener);
     } catch (error) {
-      for (const handle of this.handles) handle.stop();
-      this.handles.length = 0;
-      if (this.signalsInstalled) {
-        this.options.signals.off('SIGINT', this.signalListener);
-        this.options.signals.off('SIGTERM', this.signalListener);
-        this.signalsInstalled = false;
-      }
-      this.started = false;
+      this.stopSchedules();
       throw error;
     }
   }
@@ -158,18 +183,29 @@ class DurableWorkerScheduler implements WorkerScheduler {
     return promise;
   }
 
-  private async stop(): Promise<void> {
-    this.accepting = false;
+  private stopSchedules(): void {
     for (const handle of this.handles) handle.stop();
     this.handles.length = 0;
-    if (this.signalsInstalled) {
-      this.options.signals.off('SIGINT', this.signalListener);
-      this.options.signals.off('SIGTERM', this.signalListener);
-      this.signalsInstalled = false;
-    }
+    this.schedulesInstalled = false;
+  }
+
+  private removeSignals(): void {
+    if (!this.signalsInstalled) return;
+    this.options.signals.off('SIGINT', this.signalListener);
+    this.options.signals.off('SIGTERM', this.signalListener);
+    this.signalsInstalled = false;
+  }
+
+  private async stop(): Promise<void> {
+    this.accepting = false;
+    this.stopSchedules();
     this.controller.abort();
-    await Promise.allSettled([...this.active]);
-    await this.options.repository.close();
+    try {
+      await Promise.allSettled([...this.active]);
+      await this.options.repository.close();
+    } finally {
+      this.removeSignals();
+    }
   }
 }
 

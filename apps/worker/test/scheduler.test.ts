@@ -112,6 +112,29 @@ describe('worker scheduler', () => {
     expect(calls).toEqual(['catalog', 'prices']);
   });
 
+  it('does not create cron callbacks until the startup sequence has finished', async () => {
+    const catalog = deferred();
+    const fixture = schedulerOptions({
+      config: { ...config, runOnStartup: true },
+      runCatalogSync: vi.fn(() => catalog.promise)
+    });
+    const scheduler = createWorkerScheduler(fixture.options);
+    const starting = scheduler.start();
+
+    await vi.waitFor(() => expect(fixture.options.runCatalogSync).toHaveBeenCalledOnce());
+    expect(fixture.cron.factory).not.toHaveBeenCalled();
+    expect(fixture.cron.callbacks.get(config.priceCron)).toBeUndefined();
+    expect(fixture.options.runPriceSync).not.toHaveBeenCalled();
+
+    catalog.resolve();
+    await starting;
+
+    expect(fixture.options.runPriceSync).toHaveBeenCalledOnce();
+    expect(fixture.cron.factory).toHaveBeenCalledTimes(2);
+    expect(fixture.cron.callbacks.get(config.priceCron)).toBeTypeOf('function');
+    await scheduler.shutdown();
+  });
+
   it('skips an overlapping scheduled invocation of the same job', async () => {
     const pending = deferred();
     const fixture = schedulerOptions({ runCatalogSync: vi.fn(() => pending.promise) });
@@ -167,6 +190,39 @@ describe('worker scheduler', () => {
     expect(fixture.signals.registrar.on).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps listeners through repeated signals until a gated close settles', async () => {
+    const closing = deferred();
+    const fixture = schedulerOptions({ repository: createRepository() });
+    fixture.repository.close = vi.fn(() => closing.promise);
+    fixture.options.repository = fixture.repository;
+    const scheduler = createWorkerScheduler(fixture.options);
+    await scheduler.start();
+
+    fixture.signals.emit('SIGTERM');
+    await vi.waitFor(() => expect(fixture.repository.close).toHaveBeenCalledOnce());
+    expect(fixture.signals.registrar.off).not.toHaveBeenCalled();
+    fixture.signals.emit('SIGINT');
+    expect(fixture.repository.close).toHaveBeenCalledOnce();
+
+    closing.resolve();
+    await scheduler.waitForShutdown();
+    expect(fixture.signals.registrar.off).toHaveBeenCalledTimes(2);
+  });
+
+  it('makes a signal-triggered shutdown failure observable to its waiter', async () => {
+    const failure = new Error('close failed');
+    const fixture = schedulerOptions();
+    fixture.repository.close = vi.fn(async () => { throw failure; });
+    fixture.options.repository = fixture.repository;
+    const scheduler = createWorkerScheduler(fixture.options);
+    await scheduler.start();
+
+    fixture.signals.emit('SIGTERM');
+
+    await expect(scheduler.waitForShutdown()).rejects.toBe(failure);
+    expect(fixture.options.reportFailure).toHaveBeenCalledWith('Worker shutdown failed');
+  });
+
   it('does not start prices when shutdown occurs during startup catalog work', async () => {
     const pending = deferred();
     const fixture = schedulerOptions({
@@ -194,8 +250,21 @@ describe('worker scheduler', () => {
 
     await expect(scheduler.start()).rejects.toThrow('secret upstream failure');
 
-    expect(fixture.cron.handles.get(config.catalogCron)?.stop).toHaveBeenCalledOnce();
-    expect(fixture.cron.handles.get(config.priceCron)?.stop).toHaveBeenCalledOnce();
+    expect(fixture.cron.factory).not.toHaveBeenCalled();
+    expect(fixture.repository.close).toHaveBeenCalledOnce();
+  });
+
+  it('preserves the startup failure when shutdown cleanup also fails', async () => {
+    const primary = new Error('startup failure');
+    const cleanup = new Error('close failure');
+    const fixture = schedulerOptions({
+      config: { ...config, runOnStartup: true },
+      runCatalogSync: vi.fn(async () => { throw primary; })
+    });
+    fixture.repository.close = vi.fn(async () => { throw cleanup; });
+    fixture.options.repository = fixture.repository;
+
+    await expect(createWorkerScheduler(fixture.options).start()).rejects.toBe(primary);
     expect(fixture.repository.close).toHaveBeenCalledOnce();
   });
 });
