@@ -145,12 +145,12 @@ describe('synchronization jobs', () => {
     expect(adapter.fetchCatalog).toHaveBeenCalledTimes(3);
     expect(repository.finishSyncRun).toHaveBeenCalledWith(17, {
       status: 'failed', itemsRead: 0, itemsWritten: 0,
-      errorCode: 'UPSTREAM_HTTP', errorMessage: '[redacted url]'
+      errorCode: 'UPSTREAM_HTTP', errorMessage: 'Upstream HTTP request failed (status 503)'
     });
     expect(repository.releaseJobLock).toHaveBeenCalledOnce();
   });
 
-  it('redacts libpq-style connection strings from failed run accounting', async () => {
+  it('does not persist a libpq-style connection string from failed run accounting', async () => {
     const upstreamError = new EshopError({
       code: 'NETWORK',
       message: 'database host=localhost user=tracker dbname=eshop',
@@ -162,12 +162,13 @@ describe('synchronization jobs', () => {
     await expect(runCatalogSync(options(adapter, repository))).rejects.toBe(upstreamError);
 
     expect(repository.finishSyncRun).toHaveBeenCalledWith(17, expect.objectContaining({
-      status: 'failed', errorMessage: '[redacted connection string]'
+      status: 'failed', errorMessage: 'Network request failed'
     }));
   });
 
   it.each([
     'Authorization: Bearer bearer-value',
+    'Authorization = Bearer bearer-value',
     'Proxy-Authorization: Basic basic-value',
     'Cookie: session=cookie-value',
     'Set-Cookie: session=cookie-value',
@@ -179,8 +180,11 @@ describe('synchronization jobs', () => {
     'passwd=passwd-value',
     'token=token-value',
     'secret=secret-value',
-    'api_key=api-key-value'
-  ])('fails closed when a failed run message contains a secret (%s)', async (message) => {
+    'api_key=api-key-value',
+    'AWS_SECRET_ACCESS_KEY=aws-secret-value',
+    'PGPASSWORD=pg-password-value',
+    'credential=credential-value'
+  ])('never persists a failed run message that contains a secret (%s)', async (message) => {
     const error = new EshopError({ code: 'NETWORK', message, country: 'JP' });
     const repository = createRepository();
     const adapter = createAdapter({ fetchCatalog: vi.fn(async () => { throw error; }) });
@@ -188,9 +192,23 @@ describe('synchronization jobs', () => {
     await expect(runCatalogSync(options(adapter, repository))).rejects.toBe(error);
 
     const result = vi.mocked(repository.finishSyncRun).mock.calls[0]?.[1];
-    expect(result).toEqual(expect.objectContaining({ errorMessage: '[redacted sensitive error]' }));
-    const secretValue = message.match(/(?:Bearer\s+|Basic\s+|[:=]\s*)(\S+)/i)?.[1];
-    expect(result?.errorMessage).not.toContain(secretValue ?? message);
+    expect(result).toEqual(expect.objectContaining({ errorMessage: 'Network request failed' }));
+    expect(result?.errorMessage).not.toContain(message);
+  });
+
+  it('uses a fixed safe message for arbitrary unknown failures', async () => {
+    const message = 'internal credential=unknown-secret-value';
+    const error = new Error(message);
+    const repository = createRepository();
+    const adapter = createAdapter({ fetchCatalog: vi.fn(async () => { throw error; }) });
+
+    await expect(runCatalogSync(options(adapter, repository))).rejects.toBe(error);
+
+    const result = vi.mocked(repository.finishSyncRun).mock.calls[0]?.[1];
+    expect(result).toEqual(expect.objectContaining({
+      errorCode: 'SYNC_FAILURE', errorMessage: 'Synchronization failed'
+    }));
+    expect(result?.errorMessage).not.toContain(message);
   });
 
   it('does not retry a repository failure and preserves it if failure accounting also fails', async () => {

@@ -31,7 +31,6 @@ type CompletedSync = Omit<SyncSummary, 'jobType' | 'country' | 'status'> & {
 const FAILURE_CODE = 'SYNC_FAILURE';
 const PARTIAL_CODE = 'UNAVAILABLE_LISTINGS';
 const PARTIAL_MESSAGE = 'One or more requested listings were unavailable upstream';
-const MAX_ERROR_MESSAGE_LENGTH = 500;
 
 function assertSource(source: string, name: string): void {
   if (typeof source !== 'string' || source.trim().length === 0) {
@@ -48,26 +47,27 @@ function readNow(now: () => Date): Date {
 }
 
 function sanitizedFailure(error: unknown): Pick<SyncRunResult, 'errorCode' | 'errorMessage'> {
-  const errorCode = error instanceof EshopError && /^[A-Z_]{1,64}$/.test(error.code)
-    ? error.code
-    : FAILURE_CODE;
-  const originalMessage = error instanceof Error ? error.message : 'Synchronization failed';
-  const firstLine = originalMessage.split(/[\r\n]/, 1)[0] ?? 'Synchronization failed';
-  if (/\b(?:proxy-)?authorization\s*:\s*(?:bearer|basic)\b|\b(?:set-)?cookie\s*:|\b(?:client_secret|access_token|refresh_token|id_token|password|passwd|token|secret|api[-_ ]?key)\s*[:=]/i.test(firstLine)) {
-    return { errorCode, errorMessage: '[redacted sensitive error]' };
+  if (!(error instanceof EshopError)) {
+    return { errorCode: FAILURE_CODE, errorMessage: 'Synchronization failed' };
   }
-  if (/\b(?:host|port|dbname|database|user|username|sslmode)\s*=/i.test(firstLine)) {
-    return { errorCode, errorMessage: '[redacted connection string]' };
+
+  switch (error.code) {
+    case 'NETWORK':
+      return { errorCode: 'NETWORK', errorMessage: 'Network request failed' };
+    case 'INVALID_PAYLOAD':
+      return { errorCode: 'INVALID_PAYLOAD', errorMessage: 'Upstream response was invalid' };
+    case 'UNSUPPORTED_COUNTRY':
+      return { errorCode: 'UNSUPPORTED_COUNTRY', errorMessage: 'Country is not supported' };
+    case 'UPSTREAM_HTTP':
+      return {
+        errorCode: 'UPSTREAM_HTTP',
+        errorMessage: Number.isSafeInteger(error.status)
+          ? `Upstream HTTP request failed (status ${error.status})`
+          : 'Upstream HTTP request failed'
+      };
+    default:
+      return { errorCode: FAILURE_CODE, errorMessage: 'Synchronization failed' };
   }
-  const sanitized = firstLine
-    .replace(/\b[a-z][a-z\d+.-]*:\/\/\S+/gi, '[redacted url]')
-    .replace(/\b(password|passwd|token|secret|api[-_ ]?key)\s*[:=]\s*\S+/gi, '$1=[redacted]')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return {
-    errorCode,
-    errorMessage: (sanitized || 'Synchronization failed').slice(0, MAX_ERROR_MESSAGE_LENGTH)
-  };
 }
 
 function inconsistentPriceResult(): never {
