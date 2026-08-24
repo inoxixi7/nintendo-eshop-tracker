@@ -82,12 +82,77 @@ describe('worker CLI', () => {
   });
 
   it('does not construct an adapter for migrate', async () => {
-    const fixture = dependencies();
+    const marker = { clear: vi.fn(async () => undefined), markReady: vi.fn(async () => undefined) };
+    const fixture = dependencies({ readiness: marker } as Partial<WorkerMainDependencies>);
 
     await runWorkerCommand(['migrate'], fixture.result);
 
     expect(fixture.result.createAdapter).not.toHaveBeenCalled();
     expect(fixture.repository.close).toHaveBeenCalledOnce();
+    expect(marker.clear).not.toHaveBeenCalled();
+    expect(marker.markReady).not.toHaveBeenCalled();
+  });
+
+  it('clears before schedule initialization, marks after start, and clears on shutdown', async () => {
+    const done = deferred();
+    const marker = { clear: vi.fn(async () => undefined), markReady: vi.fn(async () => undefined) };
+    const scheduler = {
+      start: vi.fn(async () => undefined),
+      shutdown: vi.fn(async () => undefined),
+      waitForShutdown: vi.fn(() => done.promise)
+    };
+    const fixture = dependencies({
+      readiness: marker,
+      createScheduler: vi.fn(() => scheduler)
+    } as Partial<WorkerMainDependencies>);
+    const running = runWorkerCommand(['schedule'], fixture.result);
+
+    await vi.waitFor(() => expect(marker.markReady).toHaveBeenCalledOnce());
+    expect(vi.mocked(marker.clear).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(fixture.repository.migrate).mock.invocationCallOrder[0] ?? 0);
+    expect(vi.mocked(marker.markReady).mock.invocationCallOrder[0])
+      .toBeGreaterThan(vi.mocked(scheduler.start).mock.invocationCallOrder[0] ?? 0);
+
+    done.resolve();
+    await running;
+    expect(marker.clear).toHaveBeenCalledTimes(2);
+  });
+
+  it('never marks readiness and clears it when schedule startup fails', async () => {
+    const marker = { clear: vi.fn(async () => undefined), markReady: vi.fn(async () => undefined) };
+    const fixture = dependencies({
+      readiness: marker,
+      createScheduler: vi.fn(() => ({
+        start: vi.fn(async () => { throw new Error('startup failed'); }),
+        shutdown: vi.fn(async () => undefined),
+        waitForShutdown: vi.fn(async () => undefined)
+      }))
+    } as Partial<WorkerMainDependencies>);
+
+    await expect(runWorkerCommand(['schedule'], fixture.result)).rejects.toThrow('startup failed');
+
+    expect(marker.markReady).not.toHaveBeenCalled();
+    expect(marker.clear).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears readiness and shuts down when atomically marking readiness fails', async () => {
+    const failure = new Error('marker write failed');
+    const marker = { clear: vi.fn(async () => undefined), markReady: vi.fn(async () => { throw failure; }) };
+    const scheduler = {
+      start: vi.fn(async () => undefined),
+      shutdown: vi.fn(async () => undefined),
+      waitForShutdown: vi.fn(async () => undefined)
+    };
+    const fixture = dependencies({
+      readiness: marker,
+      createScheduler: vi.fn(() => scheduler)
+    } as Partial<WorkerMainDependencies>);
+
+    await expect(runWorkerCommand(['schedule'], fixture.result)).rejects.toBe(failure);
+
+    expect(marker.markReady).toHaveBeenCalledOnce();
+    expect(marker.clear).toHaveBeenCalledTimes(2);
+    expect(scheduler.shutdown).toHaveBeenCalledOnce();
   });
 
   it('keeps schedule mode pending until shutdown has completed', async () => {

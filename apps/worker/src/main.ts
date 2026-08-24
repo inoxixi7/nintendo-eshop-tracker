@@ -2,6 +2,7 @@ import { createJapanEshopAdapter, type EshopAdapter } from '@eshop-tracker/eshop
 import { createTrackerRepository, type TrackerRepository } from '@eshop-tracker/database';
 import { pathToFileURL } from 'node:url';
 import { parseWorkerConfig } from './config.js';
+import { createWorkerReadinessMarker, type WorkerReadinessMarker } from './readiness.js';
 import {
   createWorkerScheduler,
   type SignalRegistrar,
@@ -25,6 +26,7 @@ export interface WorkerMainDependencies {
   readonly runCatalogSync?: SyncFunction;
   readonly runPriceSync?: SyncFunction;
   readonly createScheduler?: (options: WorkerSchedulerOptions) => WorkerScheduler;
+  readonly readiness?: WorkerReadinessMarker;
   readonly signals?: SignalRegistrar;
   readonly writeError?: (message: string) => void;
   readonly setExitCode?: (code: number) => void;
@@ -53,6 +55,7 @@ function runtime(dependencies: WorkerMainDependencies) {
     runCatalogSync: dependencies.runCatalogSync ?? runCatalogSync,
     runPriceSync: dependencies.runPriceSync ?? runPriceSync,
     createScheduler: dependencies.createScheduler ?? createWorkerScheduler,
+    readiness: dependencies.readiness ?? createWorkerReadinessMarker(),
     signals: dependencies.signals ?? defaultSignals
   };
 }
@@ -76,7 +79,15 @@ const defaultSignals: SignalRegistrar = {
 export async function runWorkerCommand(args: readonly string[], dependencies: WorkerMainDependencies = {}): Promise<void> {
   const command = commandFrom(args);
   const services = runtime(dependencies);
-  const config = parseWorkerConfig(services.env);
+  const readiness = command === 'schedule' ? services.readiness : undefined;
+  let config;
+  try {
+    if (readiness !== undefined) await readiness.clear();
+    config = parseWorkerConfig(services.env);
+  } catch (error) {
+    if (readiness !== undefined) await readiness.clear().catch(noop);
+    throw error;
+  }
   const repository = services.createRepository(config.databaseUrl);
   let repositoryClosePromise: Promise<void> | undefined;
   let scheduler: WorkerScheduler | undefined;
@@ -150,6 +161,7 @@ export async function runWorkerCommand(args: readonly string[], dependencies: Wo
       // first await, so this removal transfers ownership without a gap.
       removeProvisionalSignals();
       await starting;
+      await readiness!.markReady();
       await scheduler.waitForShutdown();
       return;
     }
@@ -165,6 +177,7 @@ export async function runWorkerCommand(args: readonly string[], dependencies: Wo
     throw error;
   } finally {
     removeProvisionalSignals();
+    if (readiness !== undefined) await readiness.clear().catch(noop);
   }
 }
 

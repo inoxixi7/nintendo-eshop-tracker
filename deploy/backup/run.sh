@@ -5,8 +5,11 @@ umask 077
 
 backup_dir=${BACKUP_DIR:-/backups}
 interval=${BACKUP_INTERVAL_SECONDS:-86400}
+max_age=${BACKUP_MAX_AGE_SECONDS:-172800}
+success_marker="$backup_dir/.last-success"
 temporary_archive=
 temporary_sql=
+temporary_marker=
 
 log() {
   printf '%s\n' "$1" >&2
@@ -15,28 +18,33 @@ log() {
 cleanup() {
   [ -z "$temporary_archive" ] || rm -f -- "$temporary_archive" || true
   [ -z "$temporary_sql" ] || rm -f -- "$temporary_sql" || true
+  [ -z "$temporary_marker" ] || rm -f -- "$temporary_marker" || true
   temporary_archive=
   temporary_sql=
+  temporary_marker=
 }
 
 trap 'cleanup; exit 1' HUP INT TERM
 trap cleanup 0
 
-case "$interval" in
-  ''|*[!0-9]*)
-    log 'backup: BACKUP_INTERVAL_SECONDS must be a positive integer'
-    exit 2
-    ;;
-esac
-case "$interval" in
-  *[1-9]*) ;;
-  *)
-    log 'backup: BACKUP_INTERVAL_SECONDS must be a positive integer'
-    exit 2
-    ;;
-esac
+validate_positive_integer() {
+  case "$2" in
+    ''|*[!0-9]*)
+      log "backup: $1 must be a positive integer"
+      return 1
+      ;;
+    *[1-9]*) return 0 ;;
+    *)
+      log "backup: $1 must be a positive integer"
+      return 1
+      ;;
+  esac
+}
 
-mkdir -p -- "$backup_dir"
+if ! validate_positive_integer BACKUP_INTERVAL_SECONDS "$interval" \
+  || ! validate_positive_integer BACKUP_MAX_AGE_SECONDS "$max_age"; then
+  exit 2
+fi
 
 wait_for_schema() {
   while :; do
@@ -57,6 +65,12 @@ prune_backups() {
 }
 
 backup_once() {
+  if ! mkdir -p -- "$backup_dir"; then
+    return 1
+  fi
+  if ! rm -f -- "$success_marker"; then
+    return 1
+  fi
   if ! wait_for_schema; then
     return 1
   fi
@@ -93,7 +107,45 @@ backup_once() {
   if ! prune_backups; then
     return 1
   fi
+  if ! marker_time=$(date -u +%s); then
+    return 1
+  fi
+  case "$marker_time" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  temporary_marker="$backup_dir/.last-success.$$.tmp"
+  if ! printf '%s\n' "$marker_time" > "$temporary_marker"; then
+    cleanup
+    return 1
+  fi
+  if ! mv -- "$temporary_marker" "$success_marker"; then
+    cleanup
+    return 1
+  fi
+  temporary_marker=
   log 'backup: completed'
+}
+
+health() {
+  if ! validate_positive_integer BACKUP_MAX_AGE_SECONDS "$max_age"; then
+    return 1
+  fi
+  if [ ! -f "$success_marker" ]; then
+    return 1
+  fi
+  if ! marker_time=$(cat "$success_marker"); then
+    return 1
+  fi
+  case "$marker_time" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  if ! now=$(date -u +%s); then
+    return 1
+  fi
+  case "$now" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$now" -ge "$marker_time" ] && [ $((now - marker_time)) -le "$max_age" ]
 }
 
 case "${1:-loop}" in
@@ -107,6 +159,9 @@ case "${1:-loop}" in
       fi
       sleep "$interval"
     done
+    ;;
+  health)
+    health
     ;;
   *)
     log 'backup: usage: run.sh [once|loop]'

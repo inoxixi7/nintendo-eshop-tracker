@@ -1,14 +1,86 @@
 #!/bin/sh
 set -eu
 
+if [ "$#" -gt 1 ]; then
+  printf '%s\n' 'usage: compose-config.sh [env-file]' >&2
+  exit 2
+fi
+
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$repo_root"
+env_file=${1:-.env.example}
+actual_env=false
+backup_uid=
+backup_gid=
+
+if [ ! -f "$env_file" ]; then
+  printf '%s\n' 'compose validation failed: env file does not exist' >&2
+  exit 1
+fi
+
+env_value() {
+  awk -v key="$1" '
+    index($0, key "=") == 1 { value = substr($0, length(key) + 2); count += 1 }
+    END { if (count == 1) print value; else exit 1 }
+  ' "$env_file"
+}
+
+positive_integer() {
+  case "$2" in
+    ''|*[!0-9]*) return 1 ;;
+    *[1-9]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+url_safe() {
+  case "$1" in ''|*[!A-Za-z0-9_-]*) return 1 ;; *) return 0 ;; esac
+}
+
+if [ "$env_file" != '.env.example' ]; then
+  actual_env=true
+  env_mode=$(stat -c '%a' "$env_file" 2>/dev/null || stat -f '%Lp' "$env_file")
+  if [ "$env_mode" != 600 ]; then
+    printf '%s\n' 'compose validation failed: actual env file must have mode 0600' >&2
+    exit 1
+  fi
+  for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD; do
+    if ! value=$(env_value "$key") || ! url_safe "$value"; then
+      printf '%s\n' "compose validation failed: $key must be a non-empty URL-safe value" >&2
+      exit 1
+    fi
+  done
+  password=$(env_value POSTGRES_PASSWORD)
+  if [ "$password" = 'change-me' ]; then
+    printf '%s\n' 'compose validation failed: POSTGRES_PASSWORD is still the placeholder' >&2
+    exit 1
+  fi
+  backup_uid=$(env_value BACKUP_UID) || {
+    printf '%s\n' 'compose validation failed: BACKUP_UID is required' >&2
+    exit 1
+  }
+  backup_gid=$(env_value BACKUP_GID) || {
+    printf '%s\n' 'compose validation failed: BACKUP_GID is required' >&2
+    exit 1
+  }
+  interval=$(env_value BACKUP_INTERVAL_SECONDS) || exit 1
+  max_age=$(env_value BACKUP_MAX_AGE_SECONDS) || exit 1
+  if ! positive_integer BACKUP_UID "$backup_uid" \
+    || ! positive_integer BACKUP_GID "$backup_gid" \
+    || ! positive_integer BACKUP_INTERVAL_SECONDS "$interval" \
+    || ! positive_integer BACKUP_MAX_AGE_SECONDS "$max_age"; then
+    printf '%s\n' 'compose validation failed: backup UID, GID, interval, and max age must be positive integers' >&2
+    exit 1
+  fi
+fi
 
 if ! grep -q '^# INSECURE PLACEHOLDER:' .env.example; then
   printf '%s\n' 'compose validation failed: .env.example must mark its password as an insecure placeholder' >&2
   exit 1
 fi
-printf '%s\n' 'warning: .env.example is a template only; replace POSTGRES_PASSWORD before deployment' >&2
+if [ "$actual_env" = false ]; then
+  printf '%s\n' 'warning: .env.example is a template only; replace POSTGRES_PASSWORD before deployment' >&2
+fi
 
 if ! grep -q -- '--from=prod-deps /app/node_modules' Dockerfile \
   || ! grep -q -- '--from=prod-deps /app/apps/worker/node_modules' Dockerfile \
@@ -20,16 +92,16 @@ if ! grep -q -- '--from=prod-deps /app/node_modules' Dockerfile \
   exit 1
 fi
 
-docker compose --env-file .env.example config --quiet
+docker compose --env-file "$env_file" config --quiet
 
 resolved=$(mktemp "${TMPDIR:-/tmp}/nintendo-eshop-compose.XXXXXX")
 trap 'rm -f "$resolved"' EXIT HUP INT TERM
-docker compose --env-file .env.example config --format json > "$resolved"
+docker compose --env-file "$env_file" config --format json > "$resolved"
 
-node --input-type=module - "$resolved" <<'NODE'
-import { readFileSync } from 'node:fs';
+node --input-type=module - "$resolved" "$actual_env" "$backup_uid" "$backup_gid" <<'NODE'
+import { accessSync, constants, readFileSync, statSync } from 'node:fs';
 
-const [configPath] = process.argv.slice(2);
+const [configPath, actualEnv, backupUid, backupGid] = process.argv.slice(2);
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
 const services = config.services ?? {};
 const names = Object.keys(services).sort();
@@ -56,6 +128,16 @@ for (const [name, service] of Object.entries(services)) {
   }
 }
 
+if (!/^[1-9][0-9]*:[1-9][0-9]*$/.test(String(services.backup.user ?? ''))) {
+  fail('backup must run as a non-root numeric UID:GID');
+}
+if (!JSON.stringify(services.worker.healthcheck?.test ?? []).includes('/tmp/nintendo-eshop-worker-ready')) {
+  fail('worker healthcheck needs the readiness marker');
+}
+if (!JSON.stringify(services.backup.healthcheck?.test ?? []).includes('run-backup.sh health')) {
+  fail('backup healthcheck must validate the successful backup marker');
+}
+
 for (const name of ['postgres', 'worker', 'backup']) {
   if (services[name].healthcheck === undefined) fail(`${name} needs a healthcheck`);
 }
@@ -80,8 +162,35 @@ if (Object.keys(networks).length !== 1) fail('stack must use exactly one private
 for (const service of Object.values(services)) {
   if (Object.keys(service.networks ?? {}).length !== 1) fail('every service must join the private network only');
 }
+
+if (actualEnv === 'true') {
+  const bindSource = (service, target) => {
+    const volume = (service.volumes ?? []).find((entry) => entry.type === 'bind' && entry.target === target);
+    if (volume?.source === undefined) fail(`${target} needs a resolved bind source`);
+    return volume.source;
+  };
+  const dataSource = bindSource(services.postgres, '/var/lib/postgresql/data');
+  const backupSource = bindSource(services.backup, '/backups');
+  for (const source of [dataSource, backupSource]) {
+    try {
+      const stat = statSync(source);
+      if (!stat.isDirectory()) fail(`${source} must be a directory`);
+      accessSync(source, constants.W_OK);
+    } catch {
+      fail(`${source} must exist and be writable`);
+    }
+  }
+  const backupStat = statSync(backupSource);
+  if (backupStat.uid !== Number(backupUid) || backupStat.gid !== Number(backupGid)) {
+    fail('BACKUP_DIR ownership must match BACKUP_UID:BACKUP_GID');
+  }
+  if (services.backup.user !== `${backupUid}:${backupGid}`) {
+    fail('backup user does not match BACKUP_UID:BACKUP_GID');
+  }
+}
 NODE
 
 sh -n deploy/backup/run.sh
 sh -n deploy/backup/restore.sh
 sh deploy/test/backup-run.sh
+sh deploy/test/restore.sh
