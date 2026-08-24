@@ -53,6 +53,14 @@ packages/
 
 The local Compose stack includes PostgreSQL, the worker, and a backup sidecar. It publishes no host ports. See [deploy/README.md](deploy/README.md) for secret setup, startup, manual synchronization, backups, restore, update, and shutdown.
 
+To verify a clean database, one live JP catalog/price cycle, and a backup in an isolated temporary Compose project:
+
+```bash
+sh deploy/test/integration.sh
+```
+
+This integration test requires Docker access and network access to Nintendo. It removes only its temporary containers and bind-mounted test data; it never uses the deployment `.env` or production data directories.
+
 ## Design
 
 See the [general design document](docs/superpowers/specs/2026-08-10-nintendo-eshop-tracker-design.md) for the intended architecture and phased roadmap, and the [Phase 2 Japan adapter design](docs/superpowers/specs/2026-08-11-phase-2-japan-adapter-design.md) for the implemented acquisition boundary.
