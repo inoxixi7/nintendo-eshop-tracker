@@ -12,7 +12,7 @@ export interface SyncOptions {
   /** JP price API provenance before observations are linked to a regional listing: `nintendo-price-api`. */
   priceSource: string;
   now: () => Date;
-  retry?: RetryOptions;
+  retry?: Omit<RetryOptions, 'signal'>;
   signal?: AbortSignal;
 }
 
@@ -143,9 +143,12 @@ function mapObservationsToListingSource(
 }
 
 function retryOptions(options: SyncOptions): RetryOptions | undefined {
-  return options.signal === undefined
-    ? options.retry
-    : { ...options.retry, signal: options.signal };
+  const retry = options.retry as RetryOptions | undefined;
+  if (retry === undefined) {
+    return options.signal === undefined ? undefined : { signal: options.signal };
+  }
+  const { signal: _ignoredNestedSignal, ...policy } = retry;
+  return options.signal === undefined ? policy : { ...policy, signal: options.signal };
 }
 
 async function runSync(

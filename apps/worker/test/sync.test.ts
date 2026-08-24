@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { EshopError, type EshopAdapter } from '@eshop-tracker/eshop';
 import type { CatalogItem, PriceObservation } from '@eshop-tracker/shared';
 import type { TrackerRepository } from '@eshop-tracker/database';
-import { runCatalogSync, runPriceSync } from '../src/sync.js';
+import { runCatalogSync, runPriceSync, type SyncOptions } from '../src/sync.js';
 
 const startedAt = new Date('2026-08-24T03:00:00.000Z');
+
+// @ts-expect-error cancellation belongs to SyncOptions.signal, never retry policy.
+const invalidRetryPolicy: NonNullable<SyncOptions['retry']> = { signal: new AbortController().signal };
+void invalidRetryPolicy;
 
 const catalogItem: CatalogItem = {
   country: 'JP', source: 'nintendo-jp-search', sourceId: '70010000000001', productCode: null,
@@ -81,6 +85,26 @@ describe('synchronization jobs', () => {
 
     expect(adapter.fetchCatalog).toHaveBeenCalledWith(controller.signal);
     expect(adapter.fetchPrices).toHaveBeenCalledWith(['70010000000001'], controller.signal);
+  });
+
+  it('ignores untyped nested retry signals and uses only the top-level signal', async () => {
+    const nestedController = new AbortController();
+    nestedController.abort(new EshopError({ code: 'NETWORK', message: 'nested cancellation', country: 'JP' }));
+    const topLevelController = new AbortController();
+    const nestedOnlyRepository = createRepository();
+    const topLevelRepository = createRepository();
+    const adapter = createAdapter();
+    const nestedRetry = { ...options(adapter, nestedOnlyRepository).retry, signal: nestedController.signal };
+
+    await expect(runCatalogSync({
+      ...options(adapter, nestedOnlyRepository), retry: nestedRetry
+    } as unknown as SyncOptions)).resolves.toMatchObject({ status: 'success' });
+    await expect(runCatalogSync({
+      ...options(adapter, topLevelRepository), retry: nestedRetry, signal: topLevelController.signal
+    } as unknown as SyncOptions)).resolves.toMatchObject({ status: 'success' });
+
+    expect(adapter.fetchCatalog).toHaveBeenNthCalledWith(1, undefined);
+    expect(adapter.fetchCatalog).toHaveBeenNthCalledWith(2, topLevelController.signal);
   });
 
   it('records available prices and marks unavailable listings partial without exposing IDs', async () => {
