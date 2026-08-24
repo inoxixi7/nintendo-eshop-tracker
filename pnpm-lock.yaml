@@ -18,6 +18,18 @@ importers:
         specifier: 3.2.4
         version: 3.2.4(@types/node@24.3.0)
 
+  apps/worker:
+    dependencies:
+      '@eshop-tracker/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@eshop-tracker/eshop':
+        specifier: workspace:*
+        version: link:../../packages/eshop
+      '@eshop-tracker/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+
   packages/database:
     dependencies:
       '@eshop-tracker/shared':

@@ -1,0 +1,25 @@
+{
+  "name": "@eshop-tracker/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/sync.js",
+  "types": "./dist/sync.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/sync.d.ts",
+      "import": "./dist/sync.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "vitest run test",
+    "typecheck": "pnpm --filter @eshop-tracker/shared build && pnpm --filter @eshop-tracker/eshop build && pnpm --filter @eshop-tracker/database build && tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@eshop-tracker/database": "workspace:*",
+    "@eshop-tracker/eshop": "workspace:*",
+    "@eshop-tracker/shared": "workspace:*"
+  }
+}
