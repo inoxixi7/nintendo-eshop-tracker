@@ -21,6 +21,19 @@ SH
 cat > "$fake_bin/docker" <<'SH'
 #!/bin/sh
 case "$*" in
+  *'compose ps -aq '*worker*|*'compose ps -aq '*backup*)
+    case "${RESTORE_SCENARIO:-}" in
+      running|restarting|unknown) printf '%s\n' 'container-id' ;;
+    esac
+    ;;
+  *'inspect --format'*)
+    case "${RESTORE_SCENARIO:-}" in
+      running) printf '%s\n' 'running' ;;
+      restarting) printf '%s\n' 'restarting' ;;
+      unknown) printf '%s\n' 'mystery' ;;
+      *) exit 1 ;;
+    esac
+    ;;
   *'ps -q'*worker*|*'ps -q'*backup*)
     [ "${RESTORE_SCENARIO:-}" = running ] && printf '%s\n' 'container-id'
     exit 0
@@ -37,6 +50,14 @@ chmod +x "$fake_bin/gzip" "$fake_bin/docker"
 
 if RESTORE_SCENARIO=running PATH="$fake_bin:$PATH" sh "$script" "$dump" > "$test_root/running.out" 2>&1; then
   printf '%s\n' 'restore test failed: running worker or backup must block restore' >&2
+  exit 1
+fi
+if RESTORE_SCENARIO=restarting PATH="$fake_bin:$PATH" sh "$script" "$dump" > "$test_root/restarting.out" 2>&1; then
+  printf '%s\n' 'restore test failed: restarting service must block restore' >&2
+  exit 1
+fi
+if RESTORE_SCENARIO=unknown PATH="$fake_bin:$PATH" sh "$script" "$dump" > "$test_root/unknown.out" 2>&1; then
+  printf '%s\n' 'restore test failed: unknown service state must block restore' >&2
   exit 1
 fi
 if RESTORE_SCENARIO=nonempty PATH="$fake_bin:$PATH" sh "$script" "$dump" > "$test_root/nonempty.out" 2>&1; then

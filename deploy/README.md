@@ -8,11 +8,12 @@ Place the checkout beside the durable data directories:
 
 ```text
 nintendo-eshop-tracker/
-  .env                    # chmod 0600; untracked
-  compose.yaml
-  deploy/
-  ../data/postgres/       # PostgreSQL bind mount
-  ../backups/              # gzip SQL backups, owned by BACKUP_UID:BACKUP_GID
+  app/
+    .env                  # chmod 0600; untracked and excluded from rsync
+    compose.yaml
+    deploy/
+  data/postgres/          # PostgreSQL bind mount from app/ as ../data/postgres
+  backups/                # gzip SQL backups from app/ as ../backups
 ```
 
 Create the local environment file and protect it:
@@ -39,15 +40,21 @@ sudo docker compose ps
 sudo docker compose logs -f worker backup
 ```
 
+For a complete local deployment-file regression pass before transfer, run:
+
+```sh
+sh deploy/test/run.sh
+```
+
 The worker healthcheck requires PID 1 Node plus a readiness marker written only after migrations, optional initial synchronization, and Croner schedules complete. The backup healthcheck remains unhealthy until a successful dump and retention pass writes a fresh `.last-success` epoch marker. The backup sidecar waits for `001_initial.sql` plus required tables before producing its first archive.
 
 Run manual synchronization without starting a second scheduler:
 
 ```sh
-docker compose run --rm worker node apps/worker/dist/main.js migrate
-docker compose run --rm worker node apps/worker/dist/main.js catalog
-docker compose run --rm worker node apps/worker/dist/main.js prices
-docker compose run --rm worker node apps/worker/dist/main.js all
+sudo docker compose run --rm worker node apps/worker/dist/main.js migrate
+sudo docker compose run --rm worker node apps/worker/dist/main.js catalog
+sudo docker compose run --rm worker node apps/worker/dist/main.js prices
+sudo docker compose run --rm worker node apps/worker/dist/main.js all
 ```
 
 ## Backups and restore
@@ -57,14 +64,14 @@ The `backup` service makes one UTC-named `nintendo_eshop_YYYYMMDDTHHMMSSZ.sql.gz
 For a manual backup validation, use the sidecar's safe one-shot mode:
 
 ```sh
-docker compose run --rm backup sh /usr/local/bin/run-backup.sh once
+sudo docker compose run --rm backup sh /usr/local/bin/run-backup.sh once
 ```
 
 Restore is intentionally not destructive by itself: it does not drop or recreate data. An operator must first prepare a **genuinely empty target database** (no public user tables), stop both writers, confirm the selected archive, and then run:
 
 ```sh
 sudo docker compose stop worker backup
-deploy/backup/restore.sh ../backups/nintendo_eshop_YYYYMMDDTHHMMSSZ.sql.gz
+sudo deploy/backup/restore.sh ../backups/nintendo_eshop_YYYYMMDDTHHMMSSZ.sql.gz
 ```
 
 The script independently refuses to run while either writer is running, refuses a nonempty target, verifies gzip integrity, and restores through a single transaction with `psql` stopping on the first SQL error. Verify the restored database and only then restart the worker.
@@ -74,14 +81,22 @@ The script independently refuses to run while either writer is running, refuses 
 The G3 deployment directory is an rsynced release, not a Git checkout. From the reviewed development machine, synchronize the release while preserving G3 secrets and durable data:
 
 ```sh
-rsync -a --delete --exclude '.git/' --exclude '.env' --exclude 'data/' --exclude 'backups/' \
-  ./ g3:/srv/docker/nintendo-eshop-tracker/
+rsync -a --delete \
+  --exclude '.git' --exclude '.git/***' --exclude '.worktrees/' \
+  --exclude 'node_modules/' --exclude '**/node_modules/***' \
+  --exclude 'dist/' --exclude '**/dist/***' \
+  --exclude 'coverage/' --exclude '**/coverage/***' \
+  --exclude '.env' --exclude '.env.*' \
+  --exclude '*.log' --exclude 'logs/' --exclude '**/logs/***' \
+  --exclude 'data/' --exclude '**/data/***' \
+  --exclude 'backups/' --exclude '**/backups/***' \
+  ./ bber@192.168.3.39:/srv/docker/nintendo-eshop-tracker/app/
 ```
 
 Then on G3:
 
 ```sh
-cd /srv/docker/nintendo-eshop-tracker
+cd /srv/docker/nintendo-eshop-tracker/app
 sh deploy/test/compose-config.sh .env
 sudo docker compose up -d --build
 ```
@@ -91,7 +106,7 @@ Task 7 must perform this Docker build and a startup/health smoke test on G3. Loc
 To stop the private stack while preserving PostgreSQL data and backups:
 
 ```sh
-docker compose down
+sudo docker compose down
 ```
 
-Because paths are supplied through `.env` and nothing publishes a port, the same directory layout and Compose file can later move to a VPS. Keep database and backup directories outside the checkout, transfer them with suitable offline backup tooling, and explicitly choose any future ingress separately.
+Because `app/` uses `DATA_DIR=../data/postgres` and `BACKUP_DIR=../backups`, durable data remains beside—not inside—the rsynced release. Nothing publishes a port, so the same layout can later move to a VPS; transfer durable directories with suitable offline backup tooling and explicitly choose any future ingress separately.

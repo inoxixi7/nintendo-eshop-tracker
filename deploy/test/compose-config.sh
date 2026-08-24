@@ -92,16 +92,25 @@ if ! grep -q -- '--from=prod-deps /app/node_modules' Dockerfile \
   exit 1
 fi
 
-docker compose --env-file "$env_file" config --quiet
+compose_config() {
+  env \
+    -u POSTGRES_DB -u POSTGRES_USER -u POSTGRES_PASSWORD \
+    -u DATA_DIR -u BACKUP_DIR -u BACKUP_UID -u BACKUP_GID \
+    -u CATALOG_CRON -u PRICE_CRON -u TZ -u RUN_ON_STARTUP \
+    -u BACKUP_INTERVAL_SECONDS -u BACKUP_MAX_AGE_SECONDS \
+    docker compose --env-file "$env_file" "$@"
+}
+
+compose_config config --quiet
 
 resolved=$(mktemp "${TMPDIR:-/tmp}/nintendo-eshop-compose.XXXXXX")
 trap 'rm -f "$resolved"' EXIT HUP INT TERM
-docker compose --env-file "$env_file" config --format json > "$resolved"
+compose_config config --format json > "$resolved"
 
-node --input-type=module - "$resolved" "$actual_env" "$backup_uid" "$backup_gid" <<'NODE'
+node --input-type=module - "$resolved" "$actual_env" "$backup_uid" "$backup_gid" "$env_file" <<'NODE'
 import { accessSync, constants, readFileSync, statSync } from 'node:fs';
 
-const [configPath, actualEnv, backupUid, backupGid] = process.argv.slice(2);
+const [configPath, actualEnv, backupUid, backupGid, envFile] = process.argv.slice(2);
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
 const services = config.services ?? {};
 const names = Object.keys(services).sort();
@@ -110,6 +119,19 @@ const expectedNames = ['backup', 'postgres', 'worker'];
 function fail(message) {
   console.error(`compose validation failed: ${message}`);
   process.exit(1);
+}
+
+function parseEnvFile(path) {
+  const values = new Map();
+  for (const line of readFileSync(path, 'utf8').split(/\r?\n/u)) {
+    if (line.length === 0 || line.startsWith('#')) continue;
+    const separator = line.indexOf('=');
+    if (separator <= 0) fail('actual env file has an invalid assignment');
+    const key = line.slice(0, separator);
+    if (values.has(key)) fail('actual env file has duplicate assignments');
+    values.set(key, line.slice(separator + 1));
+  }
+  return values;
 }
 
 if (JSON.stringify(names) !== JSON.stringify(expectedNames)) {
@@ -164,6 +186,27 @@ for (const service of Object.values(services)) {
 }
 
 if (actualEnv === 'true') {
+  const values = parseEnvFile(envFile);
+  const required = (key) => {
+    const value = values.get(key);
+    if (value === undefined) fail('actual env file is missing a required value');
+    return value;
+  };
+  const database = required('POSTGRES_DB');
+  const user = required('POSTGRES_USER');
+  const password = required('POSTGRES_PASSWORD');
+  const expectedUrl = `postgresql://${user}:${password}@postgres:5432/${database}`;
+  if (
+    services.postgres.environment?.POSTGRES_DB !== database
+    || services.postgres.environment?.POSTGRES_USER !== user
+    || services.postgres.environment?.POSTGRES_PASSWORD !== password
+    || services.worker.environment?.DATABASE_URL !== expectedUrl
+    || services.backup.environment?.PGPASSWORD !== password
+    || services.backup.environment?.PGDATABASE !== database
+    || services.backup.environment?.PGUSER !== user
+    || services.backup.environment?.BACKUP_INTERVAL_SECONDS !== required('BACKUP_INTERVAL_SECONDS')
+    || services.backup.environment?.BACKUP_MAX_AGE_SECONDS !== required('BACKUP_MAX_AGE_SECONDS')
+  ) fail('actual env values did not render exactly');
   const bindSource = (service, target) => {
     const volume = (service.volumes ?? []).find((entry) => entry.type === 'bind' && entry.target === target);
     if (volume?.source === undefined) fail(`${target} needs a resolved bind source`);
