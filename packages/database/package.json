@@ -13,8 +13,10 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp -R migrations dist",
-    "test": "vitest run",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R migrations dist",
+    "test": "npm run test:source && npm run test:built",
+    "test:source": "vitest run test/migrations.test.ts",
+    "test:built": "npm run build && vitest run test/migrations-built.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
