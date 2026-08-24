@@ -107,7 +107,37 @@ resolved=$(mktemp "${TMPDIR:-/tmp}/nintendo-eshop-compose.XXXXXX")
 trap 'rm -f "$resolved"' EXIT HUP INT TERM
 compose_config config --format json > "$resolved"
 
-node --input-type=module - "$resolved" "$actual_env" "$backup_uid" "$backup_gid" "$env_file" <<'NODE'
+validator=${COMPOSE_CONFIG_VALIDATOR:-auto}
+use_python=false
+case "$validator" in
+  auto)
+    if ! command -v node >/dev/null 2>&1; then
+      use_python=true
+    fi
+    ;;
+  node)
+    if ! command -v node >/dev/null 2>&1; then
+      printf '%s\n' 'compose validation failed: requested node validator is unavailable' >&2
+      exit 1
+    fi
+    ;;
+  python3)
+    use_python=true
+    ;;
+  *)
+    printf '%s\n' 'compose validation failed: invalid config validator' >&2
+    exit 1
+    ;;
+esac
+
+if [ "$use_python" = true ]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' 'compose validation failed: python3 validator is unavailable' >&2
+    exit 1
+  fi
+  python3 "$repo_root/deploy/test/validate-compose.py" "$resolved" "$actual_env" "$backup_uid" "$backup_gid" "$env_file"
+else
+  node --input-type=module - "$resolved" "$actual_env" "$backup_uid" "$backup_gid" "$env_file" <<'NODE'
 import { accessSync, constants, readFileSync, statSync } from 'node:fs';
 
 const [configPath, actualEnv, backupUid, backupGid, envFile] = process.argv.slice(2);
@@ -232,6 +262,7 @@ if (actualEnv === 'true') {
   }
 }
 NODE
+fi
 
 sh -n deploy/backup/run.sh
 sh -n deploy/backup/restore.sh

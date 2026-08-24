@@ -40,6 +40,8 @@ sudo docker compose ps
 sudo docker compose logs -f worker backup
 ```
 
+The config-only preflight needs Docker Compose and either Node.js or Python 3 on the host. It automatically uses Python 3 on the G3, so the application runtime itself remains container-only.
+
 For a complete local deployment-file regression pass before transfer, run:
 
 ```sh

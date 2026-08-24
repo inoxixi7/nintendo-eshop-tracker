@@ -51,6 +51,8 @@ chmod 600 "$env_file"
 
 POSTGRES_PASSWORD=change-me TZ=UTC CATALOG_CRON='* * * * *' \
   PATH="$fake_bin:$PATH" sh "$repo_root/deploy/test/compose-config.sh" "$env_file"
+COMPOSE_CONFIG_VALIDATOR=python3 POSTGRES_PASSWORD=change-me TZ=UTC CATALOG_CRON='* * * * *' \
+  PATH="$fake_bin:$PATH" sh "$repo_root/deploy/test/compose-config.sh" "$env_file"
 
 bad_env="$test_root/placeholder.env"
 sed 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=change-me/' "$env_file" > "$bad_env"
