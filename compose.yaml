@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - type: bind
+        source: ${DATA_DIR:-../data/postgres}
+        target: /var/lib/postgresql/data
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB in .env}
+      CATALOG_CRON: ${CATALOG_CRON:-0 3 * * *}
+      PRICE_CRON: ${PRICE_CRON:-0 */6 * * *}
+      TZ: ${TZ:-Asia/Tokyo}
+      RUN_ON_STARTUP: ${RUN_ON_STARTUP:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD-SHELL", "test \"$$(cat /proc/1/comm)\" = node"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      PGUSER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    command: ["sh", "/usr/local/bin/run-backup.sh", "loop"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ${BACKUP_DIR:-../backups}
+        target: /backups
+      - type: bind
+        source: ./deploy/backup/run.sh
+        target: /usr/local/bin/run-backup.sh
+        read_only: true
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h $$PGHOST -U $$PGUSER -d $$PGDATABASE"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  private:
+    driver: bridge

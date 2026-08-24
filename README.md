@@ -6,11 +6,11 @@ The first release is planned for the Japanese (JP), United States (US), and Unit
 
 ## Current status
 
-Phase 2 provides live Japanese (JP) catalog and price acquisition, backed by offline fixtures and tests.
+Phase 3 adds PostgreSQL persistence, the durable JP synchronization worker, a daily catalog schedule, a six-hour price schedule, and a private Docker Compose deployment with daily retained backups.
 
 The JP catalog output contains price-addressable rows with Nintendo Store IDs. Search-only entries without an NSUID are skipped until the domain separates listing IDs from price IDs.
 
-PostgreSQL persistence, a daily catalog schedule, a six-hour price schedule, HTTP API routes, Web/PWA and WeChat Mini Program clients, and deployment are future work. Phase 3 will persist the daily catalog and six-hour price checks in PostgreSQL; the API will later read from that database.
+HTTP API routes, Web/PWA, and WeChat Mini Program clients remain future work. The future API will read from the persisted database.
 
 ## Requirements
 
@@ -40,13 +40,18 @@ The live smoke test requires network access and may fail when Nintendo's endpoin
 apps/
   api/       # future public read API
   web/       # future PWA
-  worker/    # future catalog and price synchronization
+  worker/    # catalog and price synchronization scheduler
 packages/
+  database/  # PostgreSQL migrations and persistence boundary
   eshop/     # regional adapter interface plus live JP catalog and price acquisition
   shared/    # normalized domain schemas/contracts and price derivations
 ```
 
 `packages/shared` provides normalized catalog and price schemas/contracts, plus price derivations. `packages/eshop` provides the regional adapter interface, typed upstream errors, output validation, and the live JP catalog and price adapter while remaining separate from future storage, API, and client code.
+
+## Private deployment
+
+The local Compose stack includes PostgreSQL, the worker, and a backup sidecar. It publishes no host ports. See [deploy/README.md](deploy/README.md) for secret setup, startup, manual synchronization, backups, restore, update, and shutdown.
 
 ## Design
 
