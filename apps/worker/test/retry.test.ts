@@ -57,6 +57,7 @@ describe('withRetry', () => {
 
   it('rejects invalid numeric options and random output', async () => {
     await expect(withRetry(async () => 'ok', { maxAttempts: 0 })).rejects.toThrow('maxAttempts');
+    await expect(withRetry(async () => 'ok', { maxAttempts: 4 })).rejects.toThrow('maxAttempts');
     await expect(withRetry(async () => 'ok', { baseDelayMs: 1.5 })).rejects.toThrow('baseDelayMs');
     await expect(withRetry(async () => 'ok', { maxDelayMs: -1 })).rejects.toThrow('maxDelayMs');
     await expect(withRetry(async () => 'ok', { jitterMs: -1 })).rejects.toThrow('jitterMs');

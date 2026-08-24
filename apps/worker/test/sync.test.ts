@@ -7,13 +7,13 @@ import { runCatalogSync, runPriceSync } from '../src/sync.js';
 const startedAt = new Date('2026-08-24T03:00:00.000Z');
 
 const catalogItem: CatalogItem = {
-  country: 'JP', source: 'nintendo', sourceId: '70010000000001', productCode: null,
+  country: 'JP', source: 'nintendo-jp-search', sourceId: '70010000000001', productCode: null,
   title: 'Example Game', publisher: null, developer: null, description: null, imageUrl: null,
   releaseDate: null, productType: 'game', sourceUrl: 'https://example.test/game', sourcePayload: {}
 };
 
 const observation: PriceObservation = {
-  country: 'JP', source: 'nintendo', sourceId: '70010000000001', currency: 'JPY',
+  country: 'JP', source: 'nintendo-price-api', sourceId: '70010000000001', currency: 'JPY',
   regularAmountMinor: 1_000, discountAmountMinor: null, discountStartAt: null,
   discountEndAt: null, salesStatus: 'ON_SALE', observedAt: startedAt.toISOString()
 };
@@ -46,7 +46,8 @@ function options(adapter: EshopAdapter, repository: TrackerRepository) {
   return {
     adapter,
     repository,
-    source: 'nintendo',
+    listingSource: 'nintendo-jp-search',
+    priceSource: 'nintendo-price-api',
     now: () => new Date(startedAt),
     retry: { baseDelayMs: 1, sleep: async () => undefined, random: () => 0.5 }
   };
@@ -79,8 +80,9 @@ describe('synchronization jobs', () => {
       status: 'partial', itemsRead: 2, itemsWritten: 1
     });
 
+    expect(repository.activeSourceIds).toHaveBeenCalledWith('JP', 'nintendo-jp-search');
     expect(adapter.fetchPrices).toHaveBeenCalledWith(['70010000000001', '70010000000002']);
-    expect(repository.recordPrices).toHaveBeenCalledWith([observation]);
+    expect(repository.recordPrices).toHaveBeenCalledWith([{ ...observation, source: 'nintendo-jp-search' }]);
     expect(repository.finishSyncRun).toHaveBeenCalledWith(17, {
       status: 'partial', itemsRead: 2, itemsWritten: 1,
       errorCode: 'UNAVAILABLE_LISTINGS',
@@ -98,6 +100,26 @@ describe('synchronization jobs', () => {
 
     expect(adapter.fetchPrices).not.toHaveBeenCalled();
     expect(repository.recordPrices).not.toHaveBeenCalled();
+  });
+
+  it('maps JP price provenance back to listing identity when every listing is unavailable', async () => {
+    const repository = createRepository({
+      activeSourceIds: vi.fn(async () => ['70010000000001', '70010000000002']),
+      recordPrices: vi.fn(async () => 0)
+    });
+    const adapter = createAdapter({
+      fetchPrices: vi.fn(async () => ({ observations: [], unavailableSourceIds: ['70010000000001', '70010000000002'] }))
+    });
+
+    await expect(runPriceSync(options(adapter, repository))).resolves.toMatchObject({
+      status: 'partial', itemsRead: 2, itemsWritten: 0
+    });
+
+    expect(repository.activeSourceIds).toHaveBeenCalledWith('JP', 'nintendo-jp-search');
+    expect(repository.recordPrices).toHaveBeenCalledWith([]);
+    expect(repository.finishSyncRun).toHaveBeenCalledWith(17, expect.objectContaining({
+      status: 'partial', errorCode: 'UNAVAILABLE_LISTINGS'
+    }));
   });
 
   it('returns a skipped summary without creating a run when the job lock is unavailable', async () => {
@@ -131,7 +153,7 @@ describe('synchronization jobs', () => {
   it('redacts libpq-style connection strings from failed run accounting', async () => {
     const upstreamError = new EshopError({
       code: 'NETWORK',
-      message: 'database host=localhost user=tracker password=secret dbname=eshop',
+      message: 'database host=localhost user=tracker dbname=eshop',
       country: 'JP'
     });
     const repository = createRepository();
@@ -142,6 +164,33 @@ describe('synchronization jobs', () => {
     expect(repository.finishSyncRun).toHaveBeenCalledWith(17, expect.objectContaining({
       status: 'failed', errorMessage: '[redacted connection string]'
     }));
+  });
+
+  it.each([
+    'Authorization: Bearer bearer-value',
+    'Proxy-Authorization: Basic basic-value',
+    'Cookie: session=cookie-value',
+    'Set-Cookie: session=cookie-value',
+    'client_secret=client-secret-value',
+    'access_token=access-token-value',
+    'refresh_token=refresh-token-value',
+    'id_token=id-token-value',
+    'password=password-value',
+    'passwd=passwd-value',
+    'token=token-value',
+    'secret=secret-value',
+    'api_key=api-key-value'
+  ])('fails closed when a failed run message contains a secret (%s)', async (message) => {
+    const error = new EshopError({ code: 'NETWORK', message, country: 'JP' });
+    const repository = createRepository();
+    const adapter = createAdapter({ fetchCatalog: vi.fn(async () => { throw error; }) });
+
+    await expect(runCatalogSync(options(adapter, repository))).rejects.toBe(error);
+
+    const result = vi.mocked(repository.finishSyncRun).mock.calls[0]?.[1];
+    expect(result).toEqual(expect.objectContaining({ errorMessage: '[redacted sensitive error]' }));
+    const secretValue = message.match(/(?:Bearer\s+|Basic\s+|[:=]\s*)(\S+)/i)?.[1];
+    expect(result?.errorMessage).not.toContain(secretValue ?? message);
   });
 
   it('does not retry a repository failure and preserves it if failure accounting also fails', async () => {
@@ -158,6 +207,39 @@ describe('synchronization jobs', () => {
     await expect(runCatalogSync(options(adapter, repository))).rejects.toBe(writeError);
 
     expect(adapter.fetchCatalog).toHaveBeenCalledOnce();
+    expect(repository.upsertCatalog).toHaveBeenCalledOnce();
+    expect(repository.releaseJobLock).toHaveBeenCalledOnce();
+  });
+
+  it('does not retry a repository active-listing read failure', async () => {
+    const readError = new Error('database read failed');
+    const repository = createRepository({ activeSourceIds: vi.fn(async () => { throw readError; }) });
+    const adapter = createAdapter();
+
+    await expect(runPriceSync(options(adapter, repository))).rejects.toBe(readError);
+
+    expect(repository.activeSourceIds).toHaveBeenCalledOnce();
+    expect(adapter.fetchPrices).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a repository price-persistence failure', async () => {
+    const writeError = new Error('database price write failed');
+    const repository = createRepository({ recordPrices: vi.fn(async () => { throw writeError; }) });
+    const adapter = createAdapter();
+
+    await expect(runPriceSync(options(adapter, repository))).rejects.toBe(writeError);
+
+    expect(adapter.fetchPrices).toHaveBeenCalledOnce();
+    expect(repository.recordPrices).toHaveBeenCalledOnce();
+  });
+
+  it('preserves an undefined primary failure when lock release also fails', async () => {
+    const releaseError = new Error('lock release failed');
+    const repository = createRepository({ releaseJobLock: vi.fn(async () => { throw releaseError; }) });
+    const adapter = createAdapter({ fetchCatalog: vi.fn(async () => { throw undefined; }) });
+
+    await expect(runCatalogSync(options(adapter, repository))).rejects.toBeUndefined();
+
     expect(repository.releaseJobLock).toHaveBeenCalledOnce();
   });
 

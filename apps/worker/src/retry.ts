@@ -23,8 +23,8 @@ function assertNonnegativeSafeInteger(value: number, name: string): void {
 }
 
 function assertPositiveSafeInteger(value: number, name: string): void {
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive safe integer`);
+  if (!Number.isSafeInteger(value) || value <= 0 || value > DEFAULT_MAX_ATTEMPTS) {
+    throw new Error(`${name} must be a positive safe integer no greater than ${DEFAULT_MAX_ATTEMPTS}`);
   }
 }
 
