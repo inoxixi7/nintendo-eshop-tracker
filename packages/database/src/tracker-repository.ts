@@ -28,7 +28,10 @@ export interface TrackerRepository {
 /** Internal test seam; it keeps pg-specific objects outside repository tests. */
 export type TrackerDatabase = DatabaseClient;
 
-const MIGRATION_LOCK_KEY = 'eshop-tracker:migrations:v1';
+const MIGRATION_LOCK_NAMESPACE = 41_420;
+const JOB_LOCK_NAMESPACE = 41_421;
+const PERSISTENCE_LOCK_NAMESPACE = 41_422;
+const MIGRATION_LOCK_ID = 1;
 const schemaMigrationsBootstrapSql = `
   CREATE TABLE IF NOT EXISTS schema_migrations (
     name text PRIMARY KEY,
@@ -36,13 +39,27 @@ const schemaMigrationsBootstrapSql = `
   )
 `;
 
-function jobLockKey(jobType: JobType, country: CountryCode): string {
-  return `eshop-tracker:job:${jobType}:${country}`;
+function countryLockId(country: CountryCode): number {
+  return { JP: 1, US: 2, GB: 3 }[country];
+}
+
+function jobLockId(jobType: JobType, country: CountryCode): number {
+  return (jobType === 'catalog' ? 1 : 2) * 10 + countryLockId(country);
+}
+
+function heldJobLockKey(jobType: JobType, country: CountryCode): string {
+  return `${jobType}:${country}`;
 }
 
 function assertValidDate(value: Date, name: string): void {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     throw new Error(`${name} must be a valid Date`);
+  }
+}
+
+function assertSafePositiveInteger(value: number, name: string): void {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive safe integer`);
   }
 }
 
@@ -87,8 +104,46 @@ async function parseObservations(observations: readonly PriceObservation[]): Pro
   return parsed;
 }
 
-async function releaseClient(client: { release(): void | Promise<void> }): Promise<void> {
-  await client.release();
+function asError(error: unknown, fallback: string): Error {
+  return error instanceof Error ? error : new Error(fallback);
+}
+
+async function releaseClient(
+  client: { release(error?: Error): void | Promise<void> },
+  error?: Error
+): Promise<Error | undefined> {
+  try {
+    await client.release(error);
+    return error;
+  } catch (releaseError) {
+    const cleanupError = error ?? asError(releaseError, 'Database session cleanup failed');
+    try {
+      await client.release(cleanupError);
+    } catch {
+      // The caller receives the first useful cleanup failure.
+    }
+    return cleanupError;
+  }
+}
+
+async function unlockAndRelease(
+  client: Awaited<ReturnType<TrackerDatabase['checkout']>>,
+  namespace: number,
+  lockId: number
+): Promise<Error | undefined> {
+  let cleanupError: Error | undefined;
+  try {
+    const result = await client.query<{ unlocked: boolean }>(
+      'SELECT pg_advisory_unlock($1, $2) AS unlocked',
+      [namespace, lockId]
+    );
+    if (result.rows[0]?.unlocked !== true) {
+      cleanupError = new Error('PostgreSQL advisory lock was not released');
+    }
+  } catch (error) {
+    cleanupError = asError(error, 'PostgreSQL advisory unlock failed');
+  }
+  return releaseClient(client, cleanupError);
 }
 
 class PostgresTrackerRepository implements TrackerRepository {
@@ -96,6 +151,8 @@ class PostgresTrackerRepository implements TrackerRepository {
   private readonly pendingJobLocks = new Set<string>();
   private closed = false;
   private closePromise: Promise<void> | undefined;
+  private activeOperations = 0;
+  private idleWaiters: Array<() => void> = [];
 
   constructor(
     private readonly database: TrackerDatabase,
@@ -108,50 +165,80 @@ class PostgresTrackerRepository implements TrackerRepository {
     }
   }
 
-  async migrate(): Promise<void> {
+  private async runOperation<T>(operation: () => Promise<T>): Promise<T> {
     this.ensureOpen();
+    this.activeOperations += 1;
+    try {
+      return await operation();
+    } finally {
+      this.activeOperations -= 1;
+      if (this.activeOperations === 0) {
+        const waiters = this.idleWaiters;
+        this.idleWaiters = [];
+        for (const resolve of waiters) {
+          resolve();
+        }
+      }
+    }
+  }
+
+  private async waitForIdleOperations(): Promise<void> {
+    if (this.activeOperations === 0) {
+      return;
+    }
+    await new Promise<void>((resolve) => this.idleWaiters.push(resolve));
+  }
+
+  migrate(): Promise<void> {
+    return this.runOperation(() => this.migrateInternal());
+  }
+
+  private async migrateInternal(): Promise<void> {
     const client = await this.database.checkout();
     let locked = false;
+    let primaryError: unknown;
     try {
-      await client.query('SELECT pg_advisory_lock(hashtext($1))', [MIGRATION_LOCK_KEY]);
+      await client.query('SELECT pg_advisory_lock($1, $2)', [MIGRATION_LOCK_NAMESPACE, MIGRATION_LOCK_ID]);
       locked = true;
       await client.query(schemaMigrationsBootstrapSql);
 
-      const migrations = await this.getMigrations();
-      const knownMigrationNames = new Set(migrations.map((migration) => migration.name));
+      const migrations = [...await this.getMigrations()].sort((left, right) => left.name.localeCompare(right.name));
       const applied = await this.database.query<{ name: string }>('SELECT name FROM schema_migrations ORDER BY name ASC');
-      for (const migration of applied.rows) {
-        if (!knownMigrationNames.has(migration.name)) {
-          throw new Error('An applied migration is missing locally');
-        }
+      const isExactPrefix = applied.rows.length <= migrations.length && applied.rows.every(
+        (migration, index) => migration.name === migrations[index]?.name
+      );
+      if (!isExactPrefix) {
+        throw new Error('Applied migrations must be an exact lexical prefix of local migrations');
       }
 
-      const appliedNames = new Set(applied.rows.map((migration) => migration.name));
-      for (const migration of migrations) {
-        if (appliedNames.has(migration.name)) {
-          continue;
-        }
+      for (const migration of migrations.slice(applied.rows.length)) {
         await this.database.transaction(async (transaction) => {
           await transaction.query(migration.sql);
           await transaction.query('INSERT INTO schema_migrations (name) VALUES ($1)', [migration.name]);
         });
       }
+    } catch (error) {
+      primaryError = error;
     } finally {
-      if (locked) {
-        try {
-          await client.query('SELECT pg_advisory_unlock(hashtext($1))', [MIGRATION_LOCK_KEY]);
-        } finally {
-          await releaseClient(client);
-        }
-      } else {
-        await releaseClient(client);
+      const cleanupError = locked
+        ? await unlockAndRelease(client, MIGRATION_LOCK_NAMESPACE, MIGRATION_LOCK_ID)
+        : await releaseClient(client);
+      if (primaryError === undefined && cleanupError !== undefined) {
+        primaryError = cleanupError;
       }
+    }
+    if (primaryError !== undefined) {
+      throw primaryError;
     }
   }
 
-  async tryJobLock(jobType: JobType, country: CountryCode): Promise<boolean> {
-    this.ensureOpen();
-    const key = jobLockKey(jobType, country);
+  tryJobLock(jobType: JobType, country: CountryCode): Promise<boolean> {
+    return this.runOperation(() => this.tryJobLockInternal(jobType, country));
+  }
+
+  private async tryJobLockInternal(jobType: JobType, country: CountryCode): Promise<boolean> {
+    const key = heldJobLockKey(jobType, country);
+    const lockId = jobLockId(jobType, country);
     if (this.heldJobLocks.has(key) || this.pendingJobLocks.has(key)) {
       return false;
     }
@@ -160,25 +247,30 @@ class PostgresTrackerRepository implements TrackerRepository {
     try {
       client = await this.database.checkout();
       const result = await client.query<{ acquired: boolean }>(
-        'SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',
-        [key]
+        'SELECT pg_try_advisory_lock($1, $2) AS acquired',
+        [JOB_LOCK_NAMESPACE, lockId]
       );
       if (result.rows[0]?.acquired !== true) {
-        await releaseClient(client);
+        const cleanupError = await releaseClient(client);
         client = undefined;
+        if (cleanupError) {
+          throw cleanupError;
+        }
         return false;
       }
       if (this.closed) {
-        await client.query('SELECT pg_advisory_unlock(hashtext($1))', [key]);
-        await releaseClient(client);
+        const cleanupError = await unlockAndRelease(client, JOB_LOCK_NAMESPACE, lockId);
         client = undefined;
+        if (cleanupError) {
+          throw cleanupError;
+        }
         return false;
       }
       this.heldJobLocks.set(key, client);
       return true;
     } catch (error) {
       if (client) {
-        await releaseClient(client);
+        await releaseClient(client, asError(error, 'Job advisory lock failed'));
       }
       throw error;
     } finally {
@@ -186,22 +278,28 @@ class PostgresTrackerRepository implements TrackerRepository {
     }
   }
 
-  async releaseJobLock(jobType: JobType, country: CountryCode): Promise<void> {
-    const key = jobLockKey(jobType, country);
+  releaseJobLock(jobType: JobType, country: CountryCode): Promise<void> {
+    return this.runOperation(() => this.releaseJobLockInternal(jobType, country));
+  }
+
+  private async releaseJobLockInternal(jobType: JobType, country: CountryCode): Promise<void> {
+    const key = heldJobLockKey(jobType, country);
     const client = this.heldJobLocks.get(key);
     if (!client) {
       return;
     }
     this.heldJobLocks.delete(key);
-    try {
-      await client.query('SELECT pg_advisory_unlock(hashtext($1))', [key]);
-    } finally {
-      await releaseClient(client);
+    const cleanupError = await unlockAndRelease(client, JOB_LOCK_NAMESPACE, jobLockId(jobType, country));
+    if (cleanupError) {
+      throw cleanupError;
     }
   }
 
-  async startSyncRun(jobType: JobType, country: CountryCode, startedAt: Date): Promise<number> {
-    this.ensureOpen();
+  startSyncRun(jobType: JobType, country: CountryCode, startedAt: Date): Promise<number> {
+    return this.runOperation(() => this.startSyncRunInternal(jobType, country, startedAt));
+  }
+
+  private async startSyncRunInternal(jobType: JobType, country: CountryCode, startedAt: Date): Promise<number> {
     assertValidDate(startedAt, 'startedAt');
     const result = await this.database.query<{ id: string | number }>(
       `INSERT INTO sync_runs (job_type, country, started_at, status)
@@ -213,19 +311,22 @@ class PostgresTrackerRepository implements TrackerRepository {
     return readSafeIdentifier(id, 'sync run id');
   }
 
-  async finishSyncRun(id: number, result: SyncRunResult): Promise<void> {
-    this.ensureOpen();
-    assertSafeNonnegativeInteger(id, 'id');
+  finishSyncRun(id: number, result: SyncRunResult): Promise<void> {
+    return this.runOperation(() => this.finishSyncRunInternal(id, result));
+  }
+
+  private async finishSyncRunInternal(id: number, result: SyncRunResult): Promise<void> {
+    assertSafePositiveInteger(id, 'id');
     if (result.status !== 'success' && result.status !== 'partial' && result.status !== 'failed') {
       throw new Error('status must be success, partial, or failed');
     }
     assertSafeNonnegativeInteger(result.itemsRead, 'itemsRead');
     assertSafeNonnegativeInteger(result.itemsWritten, 'itemsWritten');
-    await this.database.query(
+    const update = await this.database.query(
       `UPDATE sync_runs
        SET finished_at = now(), status = $2, items_read = $3, items_written = $4,
            error_code = $5, error_message = $6
-       WHERE id = $1`,
+       WHERE id = $1 AND status = 'running'`,
       [
         id,
         result.status,
@@ -235,10 +336,16 @@ class PostgresTrackerRepository implements TrackerRepository {
         result.errorMessage ?? null
       ]
     );
+    if (update.rowCount !== 1) {
+      throw new Error('Expected exactly one running sync run to finish');
+    }
   }
 
-  async upsertCatalog(items: readonly CatalogItem[], seenAt: Date): Promise<number> {
-    this.ensureOpen();
+  upsertCatalog(items: readonly CatalogItem[], seenAt: Date): Promise<number> {
+    return this.runOperation(() => this.upsertCatalogInternal(items, seenAt));
+  }
+
+  private async upsertCatalogInternal(items: readonly CatalogItem[], seenAt: Date): Promise<number> {
     assertValidDate(seenAt, 'seenAt');
     const parsed = await parseCatalog(items);
     if (parsed.length === 0) {
@@ -252,9 +359,11 @@ class PostgresTrackerRepository implements TrackerRepository {
       throw new Error('Catalog batch must contain the same country and source');
     }
 
-    await this.database.transaction(async (transaction) => {
+    return this.database.transaction(async (transaction) => {
+      await transaction.query('SELECT pg_advisory_xact_lock($1, $2)', [PERSISTENCE_LOCK_NAMESPACE, countryLockId(first.country)]);
+      let accepted = 0;
       for (const item of parsed) {
-        await transaction.query(
+        const upsert = await transaction.query(
           `INSERT INTO regional_listings (
              country, source, source_id, product_code, title, publisher, developer,
              description, image_url, release_date, product_type, source_url, source_payload, last_seen_at
@@ -272,13 +381,16 @@ class PostgresTrackerRepository implements TrackerRepository {
              source_payload = EXCLUDED.source_payload,
              is_active = TRUE,
              last_seen_at = EXCLUDED.last_seen_at,
-             updated_at = now()`,
+             updated_at = now()
+           WHERE regional_listings.last_seen_at <= EXCLUDED.last_seen_at
+           RETURNING id`,
           [
             item.country, item.source, item.sourceId, item.productCode, item.title,
             item.publisher, item.developer, item.description, item.imageUrl, item.releaseDate,
             item.productType, item.sourceUrl, JSON.stringify(item.sourcePayload), seenAt
           ]
         );
+        accepted += upsert.rowCount ?? 0;
       }
       await transaction.query(
         `UPDATE regional_listings
@@ -287,12 +399,15 @@ class PostgresTrackerRepository implements TrackerRepository {
            AND last_seen_at < $3 - interval '7 days'`,
         [first.country, first.source, seenAt]
       );
+      return accepted;
     });
-    return parsed.length;
   }
 
-  async activeSourceIds(country: CountryCode, source: string): Promise<string[]> {
-    this.ensureOpen();
+  activeSourceIds(country: CountryCode, source: string): Promise<string[]> {
+    return this.runOperation(() => this.activeSourceIdsInternal(country, source));
+  }
+
+  private async activeSourceIdsInternal(country: CountryCode, source: string): Promise<string[]> {
     const result = await this.database.query<{ source_id: string }>(
       `SELECT source_id FROM regional_listings
        WHERE country = $1 AND source = $2 AND is_active = TRUE
@@ -302,14 +417,22 @@ class PostgresTrackerRepository implements TrackerRepository {
     return result.rows.map((row) => row.source_id);
   }
 
-  async recordPrices(observations: readonly PriceObservation[]): Promise<number> {
-    this.ensureOpen();
+  recordPrices(observations: readonly PriceObservation[]): Promise<number> {
+    return this.runOperation(() => this.recordPricesInternal(observations));
+  }
+
+  private async recordPricesInternal(observations: readonly PriceObservation[]): Promise<number> {
     const parsed = await parseObservations(observations);
     if (parsed.length === 0) {
       return 0;
     }
 
+    const countries = [...new Set(parsed.map((observation) => observation.country))]
+      .sort((left, right) => countryLockId(left) - countryLockId(right));
     return this.database.transaction(async (transaction) => {
+      for (const country of countries) {
+        await transaction.query('SELECT pg_advisory_xact_lock($1, $2)', [PERSISTENCE_LOCK_NAMESPACE, countryLockId(country)]);
+      }
       let accepted = 0;
       for (const observation of parsed) {
         const listing = await transaction.query<{ id: string }>(
@@ -409,20 +532,20 @@ class PostgresTrackerRepository implements TrackerRepository {
     this.closed = true;
     this.closePromise = (async () => {
       let firstError: unknown;
+      // close owns held locks after the in-flight operation barrier; public releaseJobLock
+      // calls begun before close are allowed to finish, and new operations are rejected.
+      await this.waitForIdleOperations();
       const heldLocks = [...this.heldJobLocks.entries()];
       this.heldJobLocks.clear();
       for (const [key, client] of heldLocks) {
-        try {
-          await client.query('SELECT pg_advisory_unlock(hashtext($1))', [key]);
-        } catch (error) {
-          firstError ??= error;
-        } finally {
-          try {
-            await releaseClient(client);
-          } catch (error) {
-            firstError ??= error;
-          }
+        const [jobType, country] = key.split(':');
+        if ((jobType !== 'catalog' && jobType !== 'prices') || (country !== 'JP' && country !== 'US' && country !== 'GB')) {
+          const cleanupError = await releaseClient(client, new Error('Invalid held job lock'));
+          firstError ??= cleanupError;
+          continue;
         }
+        const cleanupError = await unlockAndRelease(client, JOB_LOCK_NAMESPACE, jobLockId(jobType, country));
+        firstError ??= cleanupError;
       }
       try {
         await this.database.close();

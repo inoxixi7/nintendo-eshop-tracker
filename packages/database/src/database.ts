@@ -14,7 +14,8 @@ export interface QueryClient {
 }
 
 export interface CheckedOutQueryClient extends QueryClient {
-  release(): void | Promise<void>;
+  /** Supplying an error makes pg discard the session instead of returning it to the pool. */
+  release(error?: Error): void | Promise<void>;
 }
 
 export interface DatabaseClient extends QueryClient {
@@ -25,7 +26,7 @@ export interface DatabaseClient extends QueryClient {
 
 type PgClientLike = {
   query(sql: string, values?: readonly unknown[]): Promise<QueryResult>;
-  release(): void;
+  release(error?: Error): void;
 };
 
 type PgPoolLike = {
@@ -56,8 +57,8 @@ class PgCheckedOutQueryClient extends PgQueryClient implements CheckedOutQueryCl
     super(checkedOutClient);
   }
 
-  release(): void {
-    this.checkedOutClient.release();
+  release(error?: Error): void {
+    this.checkedOutClient.release(error);
   }
 }
 
@@ -79,20 +80,36 @@ export class PgDatabaseClient implements DatabaseClient {
 
   async transaction<T>(operation: (client: QueryClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
+    let committed = false;
+    let released = false;
     try {
       await client.query('BEGIN');
       const result = await operation(new PgQueryClient(client));
       await client.query('COMMIT');
+      committed = true;
+      client.release();
+      released = true;
       return result;
     } catch (error) {
-      try {
-        await client.query('ROLLBACK');
-      } catch {
-        // Preserve the original operation error whenever rollback also fails.
+      let cleanupError: Error | undefined;
+      if (!committed) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          cleanupError = rollbackError instanceof Error ? rollbackError : new Error('Transaction rollback failed');
+        }
+      }
+      if (committed) {
+        cleanupError ??= error instanceof Error ? error : new Error('Database session cleanup failed');
+      }
+      if (!released) {
+        try {
+          client.release(cleanupError);
+        } catch {
+          // The original transaction error remains the useful failure for callers.
+        }
       }
       throw error;
-    } finally {
-      client.release();
     }
   }
 
