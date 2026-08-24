@@ -1,4 +1,4 @@
-FROM node:24-slim AS build
+FROM node:24-slim AS base
 
 WORKDIR /app
 
@@ -9,6 +9,12 @@ COPY apps/worker/package.json apps/worker/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/eshop/package.json packages/eshop/package.json
 COPY packages/shared/package.json packages/shared/package.json
+
+FROM base AS prod-deps
+
+RUN pnpm install --prod --frozen-lockfile
+
+FROM base AS build
 
 RUN pnpm install --frozen-lockfile
 
@@ -26,18 +32,18 @@ ENV NODE_ENV=production
 
 COPY --chown=node:node --from=build /app/package.json ./package.json
 COPY --chown=node:node --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --chown=node:node --from=build /app/node_modules ./node_modules
+COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/apps/worker/package.json apps/worker/package.json
-COPY --chown=node:node --from=build /app/apps/worker/node_modules apps/worker/node_modules
+COPY --chown=node:node --from=prod-deps /app/apps/worker/node_modules apps/worker/node_modules
 COPY --chown=node:node --from=build /app/apps/worker/dist apps/worker/dist
 COPY --chown=node:node --from=build /app/packages/database/package.json packages/database/package.json
-COPY --chown=node:node --from=build /app/packages/database/node_modules packages/database/node_modules
+COPY --chown=node:node --from=prod-deps /app/packages/database/node_modules packages/database/node_modules
 COPY --chown=node:node --from=build /app/packages/database/dist packages/database/dist
 COPY --chown=node:node --from=build /app/packages/eshop/package.json packages/eshop/package.json
-COPY --chown=node:node --from=build /app/packages/eshop/node_modules packages/eshop/node_modules
+COPY --chown=node:node --from=prod-deps /app/packages/eshop/node_modules packages/eshop/node_modules
 COPY --chown=node:node --from=build /app/packages/eshop/dist packages/eshop/dist
 COPY --chown=node:node --from=build /app/packages/shared/package.json packages/shared/package.json
-COPY --chown=node:node --from=build /app/packages/shared/node_modules packages/shared/node_modules
+COPY --chown=node:node --from=prod-deps /app/packages/shared/node_modules packages/shared/node_modules
 COPY --chown=node:node --from=build /app/packages/shared/dist packages/shared/dist
 
 USER node
