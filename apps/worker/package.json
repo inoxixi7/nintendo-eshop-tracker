@@ -11,7 +11,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "vitest run test",
@@ -20,6 +22,7 @@
   "dependencies": {
     "@eshop-tracker/database": "workspace:*",
     "@eshop-tracker/eshop": "workspace:*",
-    "@eshop-tracker/shared": "workspace:*"
+    "@eshop-tracker/shared": "workspace:*",
+    "croner": "9.1.0"
   }
 }
