@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EshopAdapter } from '@eshop-tracker/eshop';
 import type { TrackerRepository } from '@eshop-tracker/database';
+import type { SignalRegistrar } from '../src/scheduler.js';
 import { main, runWorkerCommand, type WorkerMainDependencies } from '../src/main.js';
 
 function deferred<T = void>() {
@@ -11,6 +12,23 @@ function deferred<T = void>() {
     reject = rejectPromise;
   });
   return { promise, resolve, reject };
+}
+
+function createSignals() {
+  const listeners = new Map<string, Set<() => void>>();
+  const registrar: SignalRegistrar = {
+    on: vi.fn((signal, listener) => {
+      const values = listeners.get(signal) ?? new Set<() => void>();
+      values.add(listener);
+      listeners.set(signal, values);
+    }),
+    off: vi.fn((signal, listener) => listeners.get(signal)?.delete(listener))
+  };
+  return {
+    registrar,
+    emit(signal: 'SIGINT' | 'SIGTERM') { for (const listener of listeners.get(signal) ?? []) listener(); },
+    count(signal: 'SIGINT' | 'SIGTERM') { return listeners.get(signal)?.size ?? 0; }
+  };
 }
 
 function dependencies(overrides: Partial<WorkerMainDependencies> = {}) {
@@ -63,6 +81,15 @@ describe('worker CLI', () => {
     expect(fixture.repository.close).toHaveBeenCalledOnce();
   });
 
+  it('does not construct an adapter for migrate', async () => {
+    const fixture = dependencies();
+
+    await runWorkerCommand(['migrate'], fixture.result);
+
+    expect(fixture.result.createAdapter).not.toHaveBeenCalled();
+    expect(fixture.repository.close).toHaveBeenCalledOnce();
+  });
+
   it('keeps schedule mode pending until shutdown has completed', async () => {
     const done = deferred();
     const scheduler = {
@@ -78,6 +105,62 @@ describe('worker CLI', () => {
     expect(settled).toBe(false);
     done.resolve();
     await running;
+  });
+
+  it('closes once and skips adapter, scheduler, and sync when signalled during migration', async () => {
+    const migration = deferred();
+    const closing = deferred();
+    const signals = createSignals();
+    const fixture = dependencies({ signals: signals.registrar });
+    fixture.repository.migrate = vi.fn(() => migration.promise);
+    fixture.repository.close = vi.fn(() => closing.promise);
+    let settled = false;
+    const running = runWorkerCommand(['schedule'], fixture.result).finally(() => { settled = true; });
+
+    await vi.waitFor(() => expect(signals.registrar.on).toHaveBeenCalledTimes(2));
+    signals.emit('SIGTERM');
+    signals.emit('SIGINT');
+    await vi.waitFor(() => expect(fixture.repository.close).toHaveBeenCalledOnce());
+    expect(fixture.result.createAdapter).not.toHaveBeenCalled();
+    expect(fixture.result.createScheduler).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+
+    migration.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    closing.resolve();
+    await running;
+    expect(signals.registrar.off).toHaveBeenCalledTimes(2);
+  });
+
+  it('has no signal-listener gap when ownership transfers to scheduler', async () => {
+    const signals = createSignals();
+    const schedulerListeners = { int: vi.fn(), term: vi.fn() };
+    let schedulerOptions!: Parameters<NonNullable<WorkerMainDependencies['createScheduler']>>[0];
+    const scheduler = {
+      start: vi.fn(() => {
+        schedulerOptions.signals!.on('SIGINT', schedulerListeners.int);
+        schedulerOptions.signals!.on('SIGTERM', schedulerListeners.term);
+        return Promise.resolve();
+      }),
+      shutdown: vi.fn(async () => undefined),
+      waitForShutdown: vi.fn(async () => undefined)
+    };
+    const fixture = dependencies({
+      signals: signals.registrar,
+      createScheduler: vi.fn((options) => {
+        schedulerOptions = options;
+        return scheduler;
+      })
+    });
+
+    await runWorkerCommand(['schedule'], fixture.result);
+
+    expect(schedulerOptions.signals).toBe(signals.registrar);
+    expect(vi.mocked(signals.registrar.off).mock.invocationCallOrder[0])
+      .toBeGreaterThan(vi.mocked(scheduler.start).mock.invocationCallOrder[0] ?? 0);
+    expect(signals.count('SIGINT')).toBe(1);
+    expect(signals.count('SIGTERM')).toBe(1);
   });
 
   it('closes the repository when a one-shot mode fails', async () => {
@@ -112,6 +195,24 @@ describe('worker CLI', () => {
 
     expect(fixture.result.writeError).toHaveBeenCalledWith('Worker failed.\n');
     expect(fixture.result.setExitCode).toHaveBeenCalledWith(1);
+  });
+
+  it('surfaces a provisional shutdown failure through the safe top-level failure path', async () => {
+    const migration = deferred();
+    const signals = createSignals();
+    const fixture = dependencies({ signals: signals.registrar });
+    fixture.repository.migrate = vi.fn(() => migration.promise);
+    fixture.repository.close = vi.fn(async () => { throw new Error('postgresql://secret'); });
+    const running = main(['schedule'], fixture.result);
+
+    await vi.waitFor(() => expect(signals.registrar.on).toHaveBeenCalledTimes(2));
+    signals.emit('SIGTERM');
+    migration.resolve();
+    await running;
+
+    expect(fixture.result.writeError).toHaveBeenCalledWith('Worker failed.\n');
+    expect(fixture.result.setExitCode).toHaveBeenCalledWith(1);
+    expect(fixture.result.createAdapter).not.toHaveBeenCalled();
   });
 
   it('closes a constructed repository if adapter construction fails without masking the primary error', async () => {

@@ -214,8 +214,8 @@ export function createWorkerScheduler(options: WorkerSchedulerOptions): WorkerSc
     ...options,
     cronFactory: options.cronFactory ?? defaultCronFactory,
     signals: options.signals ?? defaultSignals,
-    reportFailure: options.reportFailure ?? (() => console.error('Worker scheduled job failed')),
-    reportInfo: options.reportInfo ?? (() => console.info('Worker scheduled job skipped')),
+    reportFailure: options.reportFailure ?? ((message) => console.error(message)),
+    reportInfo: options.reportInfo ?? ((message) => console.info(message)),
     runCatalogSync: options.runCatalogSync ?? runCatalogSync,
     runPriceSync: options.runPriceSync ?? runPriceSync
   });

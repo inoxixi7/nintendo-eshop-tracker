@@ -2,7 +2,12 @@ import { createJapanEshopAdapter, type EshopAdapter } from '@eshop-tracker/eshop
 import { createTrackerRepository, type TrackerRepository } from '@eshop-tracker/database';
 import { pathToFileURL } from 'node:url';
 import { parseWorkerConfig } from './config.js';
-import { createWorkerScheduler, type WorkerScheduler, type WorkerSchedulerOptions } from './scheduler.js';
+import {
+  createWorkerScheduler,
+  type SignalRegistrar,
+  type WorkerScheduler,
+  type WorkerSchedulerOptions
+} from './scheduler.js';
 import { runCatalogSync, runPriceSync, type SyncOptions } from './sync.js';
 
 export const WORKER_USAGE = 'Usage: node dist/main.js <migrate|catalog|prices|all|schedule>\n';
@@ -20,6 +25,7 @@ export interface WorkerMainDependencies {
   readonly runCatalogSync?: SyncFunction;
   readonly runPriceSync?: SyncFunction;
   readonly createScheduler?: (options: WorkerSchedulerOptions) => WorkerScheduler;
+  readonly signals?: SignalRegistrar;
   readonly writeError?: (message: string) => void;
   readonly setExitCode?: (code: number) => void;
 }
@@ -46,7 +52,8 @@ function runtime(dependencies: WorkerMainDependencies) {
     createAdapter: dependencies.createAdapter ?? createJapanEshopAdapter,
     runCatalogSync: dependencies.runCatalogSync ?? runCatalogSync,
     runPriceSync: dependencies.runPriceSync ?? runPriceSync,
-    createScheduler: dependencies.createScheduler ?? createWorkerScheduler
+    createScheduler: dependencies.createScheduler ?? createWorkerScheduler,
+    signals: dependencies.signals ?? defaultSignals
   };
 }
 
@@ -61,32 +68,88 @@ function syncOptions(adapter: EshopAdapter, repository: TrackerRepository): Omit
 }
 
 const noop = (): void => undefined;
+const defaultSignals: SignalRegistrar = {
+  on: (signal, listener) => process.on(signal, listener),
+  off: (signal, listener) => process.off(signal, listener)
+};
 
 export async function runWorkerCommand(args: readonly string[], dependencies: WorkerMainDependencies = {}): Promise<void> {
   const command = commandFrom(args);
   const services = runtime(dependencies);
   const config = parseWorkerConfig(services.env);
   const repository = services.createRepository(config.databaseUrl);
-  let repositoryCloseAttempted = false;
+  let repositoryClosePromise: Promise<void> | undefined;
   let scheduler: WorkerScheduler | undefined;
-  const closeRepository = async (): Promise<void> => {
-    if (repositoryCloseAttempted) return;
-    repositoryCloseAttempted = true;
-    await repository.close();
+  let provisionalInstalled = false;
+  let provisionalShutdown: Promise<void> | undefined;
+  const closeRepository = (): Promise<void> => {
+    repositoryClosePromise ??= repository.close();
+    return repositoryClosePromise;
+  };
+  const provisionalListener = (): void => {
+    provisionalShutdown ??= closeRepository();
+    void provisionalShutdown.catch(noop);
+  };
+  const installProvisionalSignals = (): void => {
+    provisionalInstalled = true;
+    try {
+      services.signals.on('SIGINT', provisionalListener);
+      services.signals.on('SIGTERM', provisionalListener);
+    } catch (error) {
+      removeProvisionalSignals();
+      throw error;
+    }
+  };
+  const removeProvisionalSignals = (): void => {
+    if (!provisionalInstalled) return;
+    provisionalInstalled = false;
+    try {
+      services.signals.off('SIGINT', provisionalListener);
+    } catch {
+      // Listener removal must not expose implementation errors or mask a primary failure.
+    }
+    try {
+      services.signals.off('SIGTERM', provisionalListener);
+    } catch {
+      // Listener removal must not expose implementation errors or mask a primary failure.
+    }
   };
 
   try {
+    if (command === 'schedule') installProvisionalSignals();
+    await repository.migrate();
+    if (command === 'migrate') {
+      await closeRepository();
+      return;
+    }
+    if (provisionalShutdown !== undefined) {
+      await provisionalShutdown;
+      return;
+    }
+
     const adapter = services.createAdapter();
     const options = syncOptions(adapter, repository);
-    await repository.migrate();
+    if (provisionalShutdown !== undefined) {
+      await provisionalShutdown;
+      return;
+    }
     if (command === 'schedule') {
       scheduler = services.createScheduler({
         config,
         ...options,
+        signals: services.signals,
         runCatalogSync: services.runCatalogSync,
         runPriceSync: services.runPriceSync
       });
-      await scheduler.start();
+      if (provisionalShutdown !== undefined) {
+        await provisionalShutdown;
+        return;
+      }
+      const starting = scheduler.start();
+      // `start()` installs scheduler signal listeners synchronously before its
+      // first await, so this removal transfers ownership without a gap.
+      removeProvisionalSignals();
+      await starting;
       await scheduler.waitForShutdown();
       return;
     }
@@ -100,6 +163,8 @@ export async function runWorkerCommand(args: readonly string[], dependencies: Wo
       await closeRepository().catch(noop);
     }
     throw error;
+  } finally {
+    removeProvisionalSignals();
   }
 }
 

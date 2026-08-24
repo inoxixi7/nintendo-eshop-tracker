@@ -168,6 +168,45 @@ describe('worker scheduler', () => {
     await scheduler.shutdown();
   });
 
+  it('forwards fixed default failure and skip messages to the console', async () => {
+    const pending = deferred();
+    const fixture = schedulerOptions({ runCatalogSync: vi.fn(() => pending.promise) });
+    const { reportFailure: _failure, reportInfo: _info, ...options } = fixture.options;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const scheduler = createWorkerScheduler(options);
+    await scheduler.start();
+    const callback = fixture.cron.callbacks.get(config.catalogCron)!;
+
+    callback();
+    callback();
+    expect(info).toHaveBeenCalledWith('Scheduled catalog synchronization skipped');
+    pending.reject(new Error('postgresql://secret'));
+    await vi.waitFor(() => {
+      expect(error).toHaveBeenCalledWith('Scheduled catalog synchronization failed');
+    });
+    error.mockRestore();
+    info.mockRestore();
+    await scheduler.shutdown();
+  });
+
+  it('forwards the fixed shutdown context through the default failure reporter', async () => {
+    const failure = new Error('close failed');
+    const fixture = schedulerOptions();
+    fixture.repository.close = vi.fn(async () => { throw failure; });
+    fixture.options.repository = fixture.repository;
+    const { reportFailure: _failure, reportInfo: _info, ...options } = fixture.options;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const scheduler = createWorkerScheduler(options);
+    await scheduler.start();
+
+    fixture.signals.emit('SIGTERM');
+
+    await expect(scheduler.waitForShutdown()).rejects.toBe(failure);
+    expect(error).toHaveBeenCalledWith('Worker shutdown failed');
+    error.mockRestore();
+  });
+
   it('aborts active work, waits, closes once, and removes signal listeners on shutdown', async () => {
     const pending = deferred();
     const fixture = schedulerOptions({ runCatalogSync: vi.fn((_options) => pending.promise) });
