@@ -143,7 +143,7 @@ CREATE INDEX sync_runs_country_job_started_idx
   ON sync_runs (country, job_type, started_at DESC);
 ```
 
-`loadMigrations()` must resolve the package migration directory from `import.meta.url`, read only `*.sql`, and return lexical order. Set `onlyBuiltDependencies: [esbuild]` in `pnpm-workspace.yaml` so both pinned pnpm 10 and the local pnpm 11 runtime can install the existing test dependency. The database build must clean `dist` before compiling and copying migrations so removed migrations cannot remain in the shipped package.
+`loadMigrations()` must resolve the package migration directory from `import.meta.url`, read only `*.sql`, and return lexical order. Configure both `onlyBuiltDependencies: [esbuild]` for pinned pnpm 10.15.1 and `allowBuilds.esbuild: true` for pnpm 11 in `pnpm-workspace.yaml`, so neither supported runtime ignores the existing test dependency's esbuild build. The database build must clean `dist` before compiling and copying migrations so removed migrations cannot remain in the shipped package.
 
 - [ ] **Step 4: Run the focused test and full offline check**
 
