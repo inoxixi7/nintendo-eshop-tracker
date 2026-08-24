@@ -54,6 +54,14 @@ POSTGRES_PASSWORD=change-me TZ=UTC CATALOG_CRON='* * * * *' \
 COMPOSE_CONFIG_VALIDATOR=python3 POSTGRES_PASSWORD=change-me TZ=UTC CATALOG_CRON='* * * * *' \
   PATH="$fake_bin:$PATH" sh "$repo_root/deploy/test/compose-config.sh" "$env_file"
 
+# PostgreSQL takes ownership of its bind mount after initialization. Later
+# deployment preflights must still accept that directory while retaining the
+# stricter write and ownership checks for backups.
+chmod 500 "$data_dir"
+COMPOSE_CONFIG_VALIDATOR=python3 PATH="$fake_bin:$PATH" \
+  sh "$repo_root/deploy/test/compose-config.sh" "$env_file"
+chmod 700 "$data_dir"
+
 bad_env="$test_root/placeholder.env"
 sed 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=change-me/' "$env_file" > "$bad_env"
 chmod 600 "$bad_env"

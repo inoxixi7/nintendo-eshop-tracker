@@ -27,6 +27,8 @@ Replace `POSTGRES_PASSWORD=change-me` before starting. It must be a high-entropy
 
 Set `BACKUP_UID` and `BACKUP_GID` to the deployment owner's numeric IDs (`id -u`, `id -g`), then create `BACKUP_DIR` with that exact ownership and write permission. The backup sidecar deliberately runs as this arbitrary numeric non-root UID:GID; it uses only PostgreSQL Alpine client tools (`psql`/`pg_dump`) and does not initialize a server. Task 7 must still verify the actual G3 bind mount is writable by this user.
 
+PostgreSQL may change `DATA_DIR` to its container UID after initialization. The preflight therefore requires that path to remain a directory, while applying host ownership and write checks only to `BACKUP_DIR`.
+
 The example defaults to Tokyo time, catalog at `03:00` daily, prices every six hours, immediate startup synchronization, a daily backup interval, and a two-day maximum successful-backup age.
 
 ## Start and observe
@@ -46,6 +48,12 @@ For a complete local deployment-file regression pass before transfer, run:
 
 ```sh
 sh deploy/test/run.sh
+```
+
+On the first G3 deployment, the staged bootstrap performs an isolated live integration test, starts the production stack, waits for all healthchecks, validates persisted data and a backup, and writes a non-secret report beside `app/`:
+
+```sh
+sudo sh deploy/g3-bootstrap.sh
 ```
 
 The worker healthcheck requires PID 1 Node plus a readiness marker written only after migrations, optional initial synchronization, and Croner schedules complete. The backup healthcheck remains unhealthy until a successful dump and retention pass writes a fresh `.last-success` epoch marker. The backup sidecar waits for `001_initial.sql` plus required tables before producing its first archive.

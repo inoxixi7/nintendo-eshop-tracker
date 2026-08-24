@@ -244,14 +244,17 @@ if (actualEnv === 'true') {
   };
   const dataSource = bindSource(services.postgres, '/var/lib/postgresql/data');
   const backupSource = bindSource(services.backup, '/backups');
-  for (const source of [dataSource, backupSource]) {
-    try {
-      const stat = statSync(source);
-      if (!stat.isDirectory()) fail(`${source} must be a directory`);
-      accessSync(source, constants.W_OK);
-    } catch {
-      fail(`${source} must exist and be writable`);
-    }
+  try {
+    if (!statSync(dataSource).isDirectory()) fail(`${dataSource} must be a directory`);
+  } catch {
+    fail(`${dataSource} must exist and be a directory`);
+  }
+  try {
+    const stat = statSync(backupSource);
+    if (!stat.isDirectory()) fail(`${backupSource} must be a directory`);
+    accessSync(backupSource, constants.W_OK);
+  } catch {
+    fail(`${backupSource} must exist and be writable`);
   }
   const backupStat = statSync(backupSource);
   if (backupStat.uid !== Number(backupUid) || backupStat.gid !== Number(backupGid)) {

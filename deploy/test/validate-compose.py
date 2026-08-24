@@ -135,9 +135,10 @@ def main() -> None:
 
     data_source = bind_source(services["postgres"], "/var/lib/postgresql/data")
     backup_source = bind_source(services["backup"], "/backups")
-    for source in (data_source, backup_source):
-        if not os.path.isdir(source) or not os.access(source, os.W_OK):
-            fail(f"{source} must exist and be writable")
+    if not os.path.isdir(data_source):
+        fail(f"{data_source} must exist and be a directory")
+    if not os.path.isdir(backup_source) or not os.access(backup_source, os.W_OK):
+        fail(f"{backup_source} must exist and be writable")
 
     backup_stat = os.stat(backup_source)
     if backup_stat.st_uid != int(backup_uid) or backup_stat.st_gid != int(backup_gid):
