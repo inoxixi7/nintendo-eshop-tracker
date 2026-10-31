@@ -45,7 +45,8 @@ services:
     networks:
       - private
     healthcheck:
-      test: ["CMD-SHELL", "test \"$$(cat /proc/1/comm)\" = node && test -f /tmp/nintendo-eshop-worker-ready"]
+      # /proc/1/comm reads "MainThread" under Node 24, so check PID 1's argv[0] instead
+      test: ["CMD-SHELL", "tr '\\0' '\\n' < /proc/1/cmdline | head -n 1 | grep -qx node && test -f /tmp/nintendo-eshop-worker-ready"]
       interval: 30s
       timeout: 5s
       retries: 3
