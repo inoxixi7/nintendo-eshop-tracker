@@ -1,6 +1,6 @@
 # Private Docker Compose deployment
 
-This stack is deliberately private: it exposes no host ports. PostgreSQL, the scheduler, and its backup sidecar communicate only over the Compose network. The worker reaches Nintendo's public endpoints outbound; no management page or database is published.
+This stack is deliberately private: the only host port is the read API on loopback (`127.0.0.1:8194`). PostgreSQL, the scheduler, the API, and the backup sidecar communicate over the Compose network. The worker reaches Nintendo's public endpoints outbound; no management page or database is published.
 
 ## Layout and secrets
 
