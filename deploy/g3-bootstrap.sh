@@ -32,7 +32,7 @@ sql_true() {
 }
 
 running_services=$(docker compose ps --status running --services | sort)
-expected_services=$(printf '%s\n' backup postgres worker)
+expected_services=$(printf '%s\n' api backup postgres worker)
 if [ "$running_services" != "$expected_services" ]; then
   printf '%s\n' 'G3 bootstrap: not all production services are running' >&2
   exit 1
@@ -42,6 +42,11 @@ sql_true 'JP catalog is nonempty' "SELECT count(*) > 0 FROM regional_listings WH
 sql_true 'current prices are nonempty' 'SELECT count(*) > 0 FROM current_prices'
 sql_true 'price history is nonempty' 'SELECT count(*) > 0 FROM price_history'
 sql_true 'latest catalog and price runs completed' "SELECT count(*) = 2 AND bool_and(status IN ('success', 'partial')) FROM (SELECT status FROM sync_runs ORDER BY id DESC LIMIT 2) recent"
+
+if ! docker compose exec -T api node -e "fetch('http://127.0.0.1:3000/v1/deals?pageSize=1').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"; then
+  printf '%s\n' 'G3 bootstrap: API deals endpoint is not answering' >&2
+  exit 1
+fi
 
 archive=$(find ../backups -maxdepth 1 -type f -name 'nintendo_eshop_*.sql.gz' -print -quit)
 if [ -z "$archive" ] || [ ! -s "$archive" ]; then

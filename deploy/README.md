@@ -67,6 +67,17 @@ sudo docker compose run --rm worker node apps/worker/dist/main.js prices
 sudo docker compose run --rm worker node apps/worker/dist/main.js all
 ```
 
+## Read API
+
+The `api` service serves `/v1/health`, `/v1/listings`, `/v1/listings/:id`, `/v1/listings/:id/price-history` and `/v1/deals` from PostgreSQL only; it never calls Nintendo. Its connection forces `default_transaction_read_only=on`, so a write fails even through a bug. It is the only service that publishes a port, and only on `127.0.0.1:${API_PORT:-8194}`. Publish it to your tailnet, not the LAN:
+
+```sh
+sudo tailscale serve --bg --https=8443 http://127.0.0.1:8194
+curl https://g3.tailde10b2.ts.net:8443/v1/health
+```
+
+Prices are integer minor units with their currency; a discount is reported only while its window is open, and `stale` marks prices older than twelve hours. Public exposure needs rate limiting and CORS first.
+
 ## Backups and restore
 
 The `backup` service makes one UTC-named `nintendo_eshop_YYYYMMDDTHHMMSSZ.sql.gz` plain-SQL dump per interval and retains seven days. Files are created with `umask 077`, completed atomically, and are pruned only after a new successful backup. Its fresh success marker is updated atomically only after dump and retention success; a failed attempt clears it so health cannot report stale success. Keep the backup directory owned and writable by `BACKUP_UID:BACKUP_GID`; do not grant it wider access than needed.

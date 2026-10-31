@@ -37,14 +37,15 @@ def main() -> None:
         config = json.load(handle)
 
     services = config.get("services", {})
-    expected_names = ["backup", "postgres", "worker"]
+    expected_names = ["api", "backup", "postgres", "worker"]
     names = sorted(services)
     if names != expected_names:
         fail(f"services must be exactly {', '.join(expected_names)}, got {', '.join(names) or '(none)'}")
 
     for name, service in services.items():
-        if service.get("ports"):
-            fail(f"{name} publishes ports")
+        ports = service.get("ports", [])
+        if ports and (name != "api" or any(port.get("host_ip") != "127.0.0.1" for port in ports)):
+            fail(f"{name} publishes ports beyond api on loopback")
         if service.get("privileged") is True:
             fail(f"{name} is privileged")
         if service.get("network_mode") == "host":
@@ -70,7 +71,7 @@ def main() -> None:
     for name in expected_names:
         if "healthcheck" not in services[name]:
             fail(f"{name} needs a healthcheck")
-    for name in ("worker", "backup"):
+    for name in ("api", "worker", "backup"):
         condition = services[name].get("depends_on", {}).get("postgres", {}).get("condition")
         if condition != "service_healthy":
             fail(f"{name} must depend on healthy postgres")
@@ -110,12 +111,14 @@ def main() -> None:
     expected_url = f"postgresql://{user}:{password}@postgres:5432/{database}"
     postgres_env = services["postgres"].get("environment", {})
     worker_env = services["worker"].get("environment", {})
+    api_env = services["api"].get("environment", {})
     backup_env = services["backup"].get("environment", {})
     rendered_values_match = (
         postgres_env.get("POSTGRES_DB") == database
         and postgres_env.get("POSTGRES_USER") == user
         and postgres_env.get("POSTGRES_PASSWORD") == password
         and worker_env.get("DATABASE_URL") == expected_url
+        and api_env.get("DATABASE_URL") == f"{expected_url}?options=-c%20default_transaction_read_only%3Don"
         and backup_env.get("PGPASSWORD") == password
         and backup_env.get("PGDATABASE") == database
         and backup_env.get("PGUSER") == user

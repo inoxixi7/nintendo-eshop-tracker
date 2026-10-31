@@ -1,0 +1,19 @@
+{
+  "name": "@eshop-tracker/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "vitest run test",
+    "typecheck": "pnpm --filter @eshop-tracker/shared build && pnpm --filter @eshop-tracker/database build && tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@eshop-tracker/database": "workspace:*",
+    "fastify": "5.12.5",
+    "zod": "4.0.17"
+  }
+}

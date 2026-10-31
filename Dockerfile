@@ -5,6 +5,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/eshop/package.json packages/eshop/package.json
@@ -18,6 +19,7 @@ FROM base AS build
 
 RUN pnpm install --frozen-lockfile
 
+COPY apps/api apps/api
 COPY apps/worker apps/worker
 COPY packages/database packages/database
 COPY packages/eshop packages/eshop
@@ -33,6 +35,9 @@ ENV NODE_ENV=production
 COPY --chown=node:node --from=build /app/package.json ./package.json
 COPY --chown=node:node --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
+COPY --chown=node:node --from=build /app/apps/api/package.json apps/api/package.json
+COPY --chown=node:node --from=prod-deps /app/apps/api/node_modules apps/api/node_modules
+COPY --chown=node:node --from=build /app/apps/api/dist apps/api/dist
 COPY --chown=node:node --from=build /app/apps/worker/package.json apps/worker/package.json
 COPY --chown=node:node --from=prod-deps /app/apps/worker/node_modules apps/worker/node_modules
 COPY --chown=node:node --from=build /app/apps/worker/dist apps/worker/dist

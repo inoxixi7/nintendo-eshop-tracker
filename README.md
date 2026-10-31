@@ -38,7 +38,7 @@ The live smoke test requires network access and may fail when Nintendo's endpoin
 
 ```text
 apps/
-  api/       # future public read API
+  api/       # read-only HTTP API (Fastify) over PostgreSQL
   web/       # future PWA
   worker/    # catalog and price synchronization scheduler
 packages/

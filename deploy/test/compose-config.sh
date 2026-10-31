@@ -83,6 +83,7 @@ if [ "$actual_env" = false ]; then
 fi
 
 if ! grep -q -- '--from=prod-deps /app/node_modules' Dockerfile \
+  || ! grep -q -- '--from=prod-deps /app/apps/api/node_modules' Dockerfile \
   || ! grep -q -- '--from=prod-deps /app/apps/worker/node_modules' Dockerfile \
   || ! grep -q -- '--from=prod-deps /app/packages/database/node_modules' Dockerfile \
   || ! grep -q -- '--from=prod-deps /app/packages/eshop/node_modules' Dockerfile \
@@ -144,7 +145,7 @@ const [configPath, actualEnv, backupUid, backupGid, envFile] = process.argv.slic
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
 const services = config.services ?? {};
 const names = Object.keys(services).sort();
-const expectedNames = ['backup', 'postgres', 'worker'];
+const expectedNames = ['api', 'backup', 'postgres', 'worker'];
 
 function fail(message) {
   console.error(`compose validation failed: ${message}`);
@@ -169,7 +170,10 @@ if (JSON.stringify(names) !== JSON.stringify(expectedNames)) {
 }
 
 for (const [name, service] of Object.entries(services)) {
-  if (Array.isArray(service.ports) && service.ports.length > 0) fail(`${name} publishes ports`);
+  const ports = Array.isArray(service.ports) ? service.ports : [];
+  if (ports.length > 0 && (name !== 'api' || ports.some((port) => port.host_ip !== '127.0.0.1'))) {
+    fail(`${name} publishes ports beyond api on loopback`);
+  }
   if (service.privileged === true) fail(`${name} is privileged`);
   if (service.network_mode === 'host') fail(`${name} uses host networking`);
   if (JSON.stringify(service.volumes ?? []).includes('docker.sock')) fail(`${name} mounts docker.sock`);
@@ -190,11 +194,11 @@ if (!JSON.stringify(services.backup.healthcheck?.test ?? []).includes('run-backu
   fail('backup healthcheck must validate the successful backup marker');
 }
 
-for (const name of ['postgres', 'worker', 'backup']) {
+for (const name of ['api', 'postgres', 'worker', 'backup']) {
   if (services[name].healthcheck === undefined) fail(`${name} needs a healthcheck`);
 }
 
-for (const name of ['worker', 'backup']) {
+for (const name of ['api', 'worker', 'backup']) {
   if (services[name].depends_on?.postgres?.condition !== 'service_healthy') {
     fail(`${name} must depend on healthy postgres`);
   }
@@ -231,6 +235,7 @@ if (actualEnv === 'true') {
     || services.postgres.environment?.POSTGRES_USER !== user
     || services.postgres.environment?.POSTGRES_PASSWORD !== password
     || services.worker.environment?.DATABASE_URL !== expectedUrl
+    || services.api.environment?.DATABASE_URL !== `${expectedUrl}?options=-c%20default_transaction_read_only%3Don`
     || services.backup.environment?.PGPASSWORD !== password
     || services.backup.environment?.PGDATABASE !== database
     || services.backup.environment?.PGUSER !== user

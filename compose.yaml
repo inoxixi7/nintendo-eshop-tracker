@@ -53,6 +53,32 @@ services:
       # readiness waits for the startup sync (~8 min for JP); matches g3-bootstrap's 900 s wait
       start_period: 15m
 
+  api:
+    <<: *default-logging
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "apps/api/dist/main.js"]
+    restart: unless-stopped
+    environment:
+      # read-only sessions: the API must never write, even through a bug
+      DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB in .env}?options=-c%20default_transaction_read_only%3Don
+      TZ: ${TZ:-Asia/Tokyo}
+    ports:
+      # loopback only; reach it through `tailscale serve`, never the LAN
+      - "127.0.0.1:${API_PORT:-8194}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/v1/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   backup:
     <<: *default-logging
     image: postgres:17-alpine
