@@ -397,7 +397,7 @@ class PostgresTrackerRepository implements TrackerRepository {
         `UPDATE regional_listings
          SET is_active = FALSE, updated_at = now()
          WHERE country = $1 AND source = $2 AND is_active = TRUE
-           AND last_seen_at < $3 - interval '7 days'`,
+           AND last_seen_at < $3::timestamptz - interval '7 days'`,
         [first.country, first.source, seenAt]
       );
       return accepted;

@@ -270,7 +270,7 @@ describe('tracker repository', () => {
       JSON.stringify(catalogItem.sourcePayload),
       seenAt
     ]));
-    expect(database.transactions[0]?.[2]?.sql).toMatch(/last_seen_at < \$3 - interval '7 days'/);
+    expect(database.transactions[0]?.[2]?.sql).toMatch(/last_seen_at < \$3::timestamptz - interval '7 days'/);
     expect(database.transactions[0]?.[2]?.values).toEqual(['JP', 'nintendo', seenAt]);
   });
 
