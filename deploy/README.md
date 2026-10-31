@@ -97,7 +97,7 @@ eshop.inoxixi.com {
 }
 ```
 
-There is no rate limiting yet; add it at that proxy if the public site is abused. CORS is not needed because the web app calls the API on the same origin.
+The API allows 120 `/v1` requests per minute per visitor IP (static files are not limited). It reads the visitor from `X-Forwarded-For` counting two trusted hops (Docker's port proxy, then Tailscale serve), so a spoofed leftmost address does not escape the limit; change the hop count in `apps/api/src/main.ts` if the proxy chain changes. CORS is not needed because the web app calls the API on the same origin.
 
 ## Backups and restore
 
