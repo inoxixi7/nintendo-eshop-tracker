@@ -20,3 +20,9 @@ const router = createRouter({
 });
 
 createApp(App).use(router).mount('#app');
+
+// A new deploy's service worker takes over right away (autoUpdate); reload into it instead of
+// showing the cached build until the next visit. A first install has no controller and needs no reload.
+if (navigator.serviceWorker?.controller) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true });
+}
