@@ -36,12 +36,12 @@ onUnmounted(close);
 <template>
   <div ref="root" class="settings" @keydown.esc="close">
     <button class="icon lang" :aria-label="t('settings.language')" :aria-expanded="open" aria-haspopup="menu" @click="toggleMenu">
-      <!-- globe inside a circular arrow: "switch language" -->
+      <!-- two speech bubbles, "A" and "文": "switch language" -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6" />
-        <path d="M20.5 3.5V7.5h-4" />
-        <circle cx="12" cy="12" r="3.6" />
-        <ellipse cx="12" cy="12" rx="1.5" ry="3.6" />
+        <path d="M3.5 1.5h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7l-3 2.5v-2.5h-.5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z" />
+        <path d="M5.6 9.2 7.5 4l1.9 5.2M6.3 7.4h2.4" />
+        <path d="M15.5 9.5h5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H20v2.5l-3-2.5h-4.5a2 2 0 0 1-2-2v-4" />
+        <path d="M16.5 11v1M13.8 12.6h5.4M15.2 12.8c.5 2 1.8 3.4 3.8 4.3M17.8 12.8c-.5 2-1.8 3.4-3.8 4.3" />
       </svg>
     </button>
     <div v-if="open" ref="menu" class="menu" role="menu" :aria-label="t('settings.language')">
@@ -77,6 +77,7 @@ onUnmounted(close);
 }
 
 .icon[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--accent); }
+.lang svg { width: 24px; height: 24px; stroke-width: 1.5; }
 .icon svg, .menu svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 .menu {
