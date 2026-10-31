@@ -275,4 +275,13 @@ describe('rate limiting', () => {
     expect((await app.inject(from('198.51.100.9, 100.118.225.127'))).statusCode).toBe(200);
     expect((await app.inject('/')).statusCode).toBe(404);
   });
+
+  it('keys public visitors by the X-Real-IP the public proxy sets', async () => {
+    const app = buildApp(fakeDb(() => [{ job_type: 'prices', finished_at: RECENT }]).db, { trustProxy: 2 });
+    const via = (visitor: string) => ({ url: '/v1/health', headers: { 'x-forwarded-for': '100.118.225.127', 'x-real-ip': visitor } });
+
+    for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i += 1) await app.inject(via('203.0.113.7'));
+    expect((await app.inject(via('203.0.113.7'))).statusCode).toBe(429);
+    expect((await app.inject(via('198.51.100.9'))).statusCode).toBe(200);
+  });
 });

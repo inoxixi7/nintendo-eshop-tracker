@@ -77,6 +77,12 @@ export function buildApp(
     timeWindow: '1 minute',
     // the web app's static files are cheap and cached; only the database-backed API is limited
     allowList: (request) => !request.url.startsWith('/v1/'),
+    // Tailscale serve rewrites X-Forwarded-For to the public proxy's address, so that proxy also sends the
+    // visitor in X-Real-IP (overwriting any the visitor sent). Only tailnet devices can reach us without it.
+    keyGenerator: (request) => {
+      const realIp = request.headers['x-real-ip'];
+      return typeof realIp === 'string' && realIp.length > 0 ? realIp : request.ip;
+    },
     errorResponseBuilder: (_request, context) =>
       new ApiError(context.statusCode, 'RATE_LIMITED', `too many requests, retry in ${context.after}`)
   });

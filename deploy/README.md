@@ -93,11 +93,12 @@ eshop.inoxixi.com {
 	encode zstd gzip
 	reverse_proxy https://g3.tailde10b2.ts.net:8443 {
 		header_up Host g3.tailde10b2.ts.net
+		header_up X-Real-IP {client_ip}
 	}
 }
 ```
 
-The API allows 120 `/v1` requests per minute per visitor IP (static files are not limited). It reads the visitor from `X-Forwarded-For` counting two trusted hops (Docker's port proxy, then Tailscale serve), so a spoofed leftmost address does not escape the limit; change the hop count in `apps/api/src/main.ts` if the proxy chain changes. CORS is not needed because the web app calls the API on the same origin.
+The API allows 120 `/v1` requests per minute per visitor IP (static files are not limited). Tailscale serve rewrites `X-Forwarded-For` to the public proxy's tailnet address, so the proxy must send the visitor in `X-Real-IP` (Caddy's `header_up` replaces any value the visitor sent); without it every public visitor shares one limit. Requests straight from tailnet devices are keyed by their tailnet address, read from `X-Forwarded-For` behind two trusted hops (Docker's port proxy, then Tailscale serve). CORS is not needed because the web app calls the API on the same origin.
 
 ## Backups and restore
 
