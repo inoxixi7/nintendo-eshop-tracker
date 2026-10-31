@@ -366,8 +366,8 @@ class PostgresTrackerRepository implements TrackerRepository {
         const upsert = await transaction.query(
           `INSERT INTO regional_listings (
              country, source, source_id, product_code, title, publisher, developer,
-             description, image_url, release_date, product_type, source_url, source_payload, last_seen_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14)
+             description, image_url, release_date, product_type, platform, source_url, source_payload, last_seen_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)
            ON CONFLICT (country, source, source_id) DO UPDATE SET
              product_code = EXCLUDED.product_code,
              title = EXCLUDED.title,
@@ -377,6 +377,7 @@ class PostgresTrackerRepository implements TrackerRepository {
              image_url = EXCLUDED.image_url,
              release_date = EXCLUDED.release_date,
              product_type = EXCLUDED.product_type,
+             platform = EXCLUDED.platform,
              source_url = EXCLUDED.source_url,
              source_payload = EXCLUDED.source_payload,
              is_active = TRUE,
@@ -387,7 +388,7 @@ class PostgresTrackerRepository implements TrackerRepository {
           [
             item.country, item.source, item.sourceId, item.productCode, item.title,
             item.publisher, item.developer, item.description, item.imageUrl, item.releaseDate,
-            item.productType, item.sourceUrl, JSON.stringify(item.sourcePayload), seenAt
+            item.productType, item.platform, item.sourceUrl, JSON.stringify(item.sourcePayload), seenAt
           ]
         );
         accepted += upsert.rowCount ?? 0;

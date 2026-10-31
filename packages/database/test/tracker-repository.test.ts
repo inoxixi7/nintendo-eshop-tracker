@@ -116,6 +116,7 @@ const catalogItem: CatalogItem = {
   imageUrl: 'https://example.com/game.jpg',
   releaseDate: '2026-08-01',
   productType: 'game',
+  platform: 'switch',
   sourceUrl: 'https://example.com/game',
   sourcePayload: { id: '70010000000001' }
 };

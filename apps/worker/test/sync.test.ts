@@ -13,7 +13,7 @@ void invalidRetryPolicy;
 const catalogItem: CatalogItem = {
   country: 'JP', source: 'nintendo-jp-search', sourceId: '70010000000001', productCode: null,
   title: 'Example Game', publisher: null, developer: null, description: null, imageUrl: null,
-  releaseDate: null, productType: 'game', sourceUrl: 'https://example.test/game', sourcePayload: {}
+  releaseDate: null, productType: 'game', platform: 'switch', sourceUrl: 'https://example.test/game', sourcePayload: {}
 };
 
 const observation: PriceObservation = {

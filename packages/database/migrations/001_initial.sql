@@ -26,6 +26,7 @@ CREATE TABLE regional_listings (
   image_url text,
   release_date date,
   product_type text NOT NULL,
+  platform text NOT NULL CHECK (platform IN ('switch', 'switch2')),
   source_url text,
   source_payload jsonb NOT NULL,
   is_active boolean NOT NULL DEFAULT true,
