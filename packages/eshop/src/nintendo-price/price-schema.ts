@@ -26,7 +26,7 @@ const AvailablePriceSchema = z.object({
   discount_price: DiscountMoneySchema.optional()
 }).loose();
 
-// Unreleased or terminated titles may carry no price; not_found may carry a JPY 0 stub. All are unpriced.
+// Unreleased or terminated titles may carry no price; delisted (not_found) titles may keep their last JPY price. All are unpriced.
 const UnavailablePriceSchema = z.union([
   z.object({
     title_id: TitleIdSchema,
@@ -37,7 +37,7 @@ const UnavailablePriceSchema = z.union([
   z.object({
     title_id: TitleIdSchema,
     sales_status: z.literal('not_found'),
-    regular_price: MoneySchema.extend({ raw_value: z.literal('0') }),
+    regular_price: MoneySchema,
     discount_price: z.never().optional()
   }).loose()
 ]);

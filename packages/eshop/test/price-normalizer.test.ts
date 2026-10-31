@@ -203,6 +203,10 @@ describe('Nintendo JP raw price schema', () => {
     ['not_found with a JPY 0 stub', {
       sales_status: 'not_found',
       regular_price: { amount: '0円', currency: 'JPY', raw_value: '0' }
+    }],
+    ['not_found with its last JPY price', {
+      sales_status: 'not_found',
+      regular_price: { amount: '3,888円', currency: 'JPY', raw_value: '3888' }
     }]
   ])('emits %s only as an unavailable source ID', (_label, fields) => {
     const result = normalizeNintendoPriceResponse(NintendoPriceResponseSchema.parse(response([{
