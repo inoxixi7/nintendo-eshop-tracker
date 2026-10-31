@@ -1,10 +1,13 @@
 import type { QueryClient } from '@eshop-tracker/database';
+import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { getHealth, getListing, getPriceHistory, listListings } from './queries.js';
 
 const MAX_PAGE_SIZE = 100;
+// per client IP; generous for a person scrolling and typing, slows a flood before it reaches PostgreSQL
+export const RATE_LIMIT_PER_MINUTE = 120;
 
 const Platform = z.enum(['switch', 'switch2']);
 const ProductType = z.enum(['game', 'bundle', 'dlc', 'unknown']);
@@ -61,8 +64,22 @@ function notFound(): never {
   throw new ApiError(404, 'NOT_FOUND', 'listing not found');
 }
 
-export function buildApp(db: QueryClient, options: { logger?: boolean; webRoot?: string } = {}): FastifyInstance {
-  const app = Fastify({ logger: options.logger ?? false });
+export function buildApp(
+  db: QueryClient,
+  options: { logger?: boolean; webRoot?: string; trustProxy?: number } = {}
+): FastifyInstance {
+  // trustProxy counts the proxies in front of us, so request.ip is the visitor, not the last proxy
+  const hops = options.trustProxy ?? 0;
+  const app = Fastify({ logger: options.logger ?? false, trustProxy: (_address, hop) => hop < hops });
+
+  app.register(rateLimit, {
+    max: RATE_LIMIT_PER_MINUTE,
+    timeWindow: '1 minute',
+    // the web app's static files are cheap and cached; only the database-backed API is limited
+    allowList: (request) => !request.url.startsWith('/v1/'),
+    errorResponseBuilder: (_request, context) =>
+      new ApiError(context.statusCode, 'RATE_LIMITED', `too many requests, retry in ${context.after}`)
+  });
 
   if (options.webRoot !== undefined) {
     app.register(fastifyStatic, {
@@ -86,29 +103,32 @@ export function buildApp(db: QueryClient, options: { logger?: boolean; webRoot?:
   });
   app.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'NOT_FOUND', 'route not found'));
 
-  app.get('/v1/health', async () => getHealth(db));
+  // routes live in a plugin registered after the rate limiter so its onRoute hook covers them
+  app.register(async (api) => {
+    api.get('/v1/health', async () => getHealth(db));
 
-  app.get('/v1/listings', async (request) => {
-    const query = parse(ListingsQuery, request.query);
-    const result = await listListings(db, query);
-    return { items: result.items, page: query.page, pageSize: query.pageSize, total: result.total };
-  });
+    api.get('/v1/listings', async (request) => {
+      const query = parse(ListingsQuery, request.query);
+      const result = await listListings(db, query);
+      return { items: result.items, page: query.page, pageSize: query.pageSize, total: result.total };
+    });
 
-  app.get('/v1/deals', async (request) => {
-    const query = parse(DealsQuery, request.query);
-    const result = await listListings(db, { ...query, onSale: true });
-    return { items: result.items, page: query.page, pageSize: query.pageSize, total: result.total };
-  });
+    api.get('/v1/deals', async (request) => {
+      const query = parse(DealsQuery, request.query);
+      const result = await listListings(db, { ...query, onSale: true });
+      return { items: result.items, page: query.page, pageSize: query.pageSize, total: result.total };
+    });
 
-  app.get('/v1/listings/:id', async (request) => {
-    const { id } = parse(ListingParams, request.params);
-    return (await getListing(db, id)) ?? notFound();
-  });
+    api.get('/v1/listings/:id', async (request) => {
+      const { id } = parse(ListingParams, request.params);
+      return (await getListing(db, id)) ?? notFound();
+    });
 
-  app.get('/v1/listings/:id/price-history', async (request) => {
-    const { id } = parse(ListingParams, request.params);
-    const query = parse(HistoryQuery, request.query);
-    return (await getPriceHistory(db, id, query)) ?? notFound();
+    api.get('/v1/listings/:id/price-history', async (request) => {
+      const { id } = parse(ListingParams, request.params);
+      const query = parse(HistoryQuery, request.query);
+      return (await getPriceHistory(db, id, query)) ?? notFound();
+    });
   });
 
   return app;

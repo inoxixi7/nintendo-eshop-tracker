@@ -1,6 +1,6 @@
 import type { QueryClient } from '@eshop-tracker/database';
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../src/app.js';
+import { buildApp, RATE_LIMIT_PER_MINUTE } from '../src/app.js';
 
 const ID = '11111111-2222-4333-8444-555555555555';
 const RECENT = new Date(Date.now() - 60 * 60 * 1000);
@@ -255,5 +255,24 @@ describe('web app hosting', () => {
     const missing = await app.inject('/v1/nope');
     expect(missing.statusCode).toBe(404);
     expect(missing.json().error.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('rate limiting', () => {
+  const from = (ip: string) => ({ url: '/v1/health', headers: { 'x-forwarded-for': ip } });
+
+  it('limits each visitor behind the proxies separately and leaves static files alone', async () => {
+    const app = buildApp(fakeDb(() => [{ job_type: 'prices', finished_at: RECENT }]).db, { trustProxy: 2 });
+
+    for (let i = 0; i < RATE_LIMIT_PER_MINUTE; i += 1) expect((await app.inject(from('203.0.113.7, 100.118.225.127'))).statusCode).toBe(200);
+    const limited = await app.inject(from('203.0.113.7, 100.118.225.127'));
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error.code).toBe('RATE_LIMITED');
+    expect(limited.headers['retry-after']).toBeDefined();
+
+    // a spoofed leftmost address does not escape the limit; another visitor is unaffected
+    expect((await app.inject(from('198.51.100.1, 203.0.113.7, 100.118.225.127'))).statusCode).toBe(429);
+    expect((await app.inject(from('198.51.100.9, 100.118.225.127'))).statusCode).toBe(200);
+    expect((await app.inject('/')).statusCode).toBe(404);
   });
 });

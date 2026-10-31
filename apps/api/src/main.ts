@@ -12,7 +12,10 @@ if (databaseUrl === undefined || databaseUrl.length === 0) {
 const port = Number(process.env.PORT ?? 3000);
 const db = new PgDatabaseClient(databaseUrl);
 const webRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url));
-const app = buildApp(db, { logger: true, ...(existsSync(webRoot) ? { webRoot } : {}) });
+// Docker's port proxy, plus Tailscale serve (and the public Caddy in front of it) add forwarded hops.
+// Counting from the nearest hop keeps a visitor-supplied X-Forwarded-For from choosing their own IP.
+const trustProxy = 2;
+const app = buildApp(db, { logger: true, trustProxy, ...(existsSync(webRoot) ? { webRoot } : {}) });
 
 async function shutdown() {
   await app.close();

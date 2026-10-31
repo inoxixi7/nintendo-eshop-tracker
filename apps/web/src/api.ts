@@ -80,6 +80,7 @@ async function get<T>(path: string, query: Query = {}): Promise<T> {
   }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 429) throw new ApiError(429, '请求太频繁了，请稍等一分钟再试');
     throw new ApiError(response.status, body?.error?.message ?? `请求失败（${response.status}）`);
   }
   return body as T;
