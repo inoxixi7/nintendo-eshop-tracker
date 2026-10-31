@@ -49,7 +49,8 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      # readiness waits for the startup sync (~8 min for JP); matches g3-bootstrap's 900 s wait
+      start_period: 15m
 
   backup:
     <<: *default-logging
