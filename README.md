@@ -8,7 +8,7 @@ The first release is planned for the Japanese (JP), United States (US), and Unit
 
 Phase 2 provides live Japanese (JP) catalog and price acquisition, backed by offline fixtures and tests.
 
-The JP catalog output contains price-addressable rows with Nintendo Store IDs. Search-only entries without an NSUID are skipped until the domain separates listing IDs from price IDs.
+The JP catalog covers Nintendo Switch (`1_HAC`) and Nintendo Switch 2 (`05_BEE`) listings; each row keeps its hardware code in `sourcePayload.hard`. It contains price-addressable rows with Nintendo Store IDs. Search-only entries without an NSUID, and directory-only variants such as `70010000039949_2`, are skipped until the domain separates listing IDs from price IDs. Titles that are unreleased without an announced price, terminated, or not found are reported as unavailable rather than priced.
 
 PostgreSQL persistence, a daily catalog schedule, a six-hour price schedule, HTTP API routes, Web/PWA and WeChat Mini Program clients, and deployment are future work. Phase 3 will persist the daily catalog and six-hour price checks in PostgreSQL; the API will later read from that database.
 

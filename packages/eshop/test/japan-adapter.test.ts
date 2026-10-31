@@ -9,6 +9,7 @@ import type { FetchLike } from '../src/upstream-json.js';
 
 const FIRST_SOURCE_ID = '70010000000141';
 const SECOND_SOURCE_ID = '70010000000185';
+const SWITCH_2_SOURCE_ID = '70010000000200';
 const IMAGE_HASH = 'a'.repeat(64);
 const OBSERVED_AT = '2026-08-11T00:00:00.000Z';
 
@@ -83,7 +84,7 @@ describe('createJapanEshopAdapter', () => {
       expect(adapter.country).toBe('JP');
       expect(callCount).toBe(0);
       await expect(adapter.fetchCatalog(signal)).resolves.toEqual([]);
-      expect(callCount).toBe(1);
+      expect(callCount).toBe(2);
       expect(receivedThis).toBe(globalThis);
       expect(receivedSignal).toBe(signal);
     } finally {
@@ -103,6 +104,13 @@ describe('createJapanEshopAdapter', () => {
         && url.pathname === '/nintendo_soft/search.json'
       ) {
         const page = url.searchParams.get('page');
+        if (url.searchParams.get('opt_hard') === '05_BEE') {
+          // repeats FIRST_SOURCE_ID to prove cross-hardware rows are deduplicated
+          return jsonResponse(catalogPage([
+            catalogItem(SWITCH_2_SOURCE_ID, 'Synthetic Switch 2'),
+            catalogItem(FIRST_SOURCE_ID, 'Synthetic First duplicate')
+          ]));
+        }
         if (page === '1') {
           return jsonResponse(catalogPage([
             catalogItem(FIRST_SOURCE_ID, 'Synthetic First')
@@ -137,18 +145,20 @@ describe('createJapanEshopAdapter', () => {
 
     expect(validateCatalogBatch(catalog, 'JP')).toEqual(catalog);
     expect(validatePriceBatch(prices.observations, 'JP')).toEqual(prices.observations);
-    expect(catalog.map((item) => item.sourceId)).toEqual([
-      FIRST_SOURCE_ID,
-      SECOND_SOURCE_ID
+    expect(catalog.map((item) => [item.sourceId, item.title])).toEqual([
+      [FIRST_SOURCE_ID, 'Synthetic First'],
+      [SECOND_SOURCE_ID, 'Synthetic Second'],
+      [SWITCH_2_SOURCE_ID, 'Synthetic Switch 2']
     ]);
     expect(prices.observations.map((item) => item.sourceId)).toEqual([
-      FIRST_SOURCE_ID
+      FIRST_SOURCE_ID,
+      SWITCH_2_SOURCE_ID
     ]);
     expect(prices.unavailableSourceIds).toEqual([SECOND_SOURCE_ID]);
     expect(prices.observations[0]?.observedAt).toBe(OBSERVED_AT);
     expect(now).toHaveBeenCalledOnce();
     expect(sourceIds).toEqual(sourceIdsBefore);
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(4);
 
     const catalogCalls = fetch.mock.calls.filter(([input]) => (
       input instanceof URL && input.hostname === 'search.nintendo.jp'
@@ -156,7 +166,7 @@ describe('createJapanEshopAdapter', () => {
     const priceCalls = fetch.mock.calls.filter(([input]) => (
       input instanceof URL && input.hostname === 'api.ec.nintendo.com'
     ));
-    expect(catalogCalls).toHaveLength(2);
+    expect(catalogCalls).toHaveLength(3);
     expect(catalogCalls.every(([, init]) => init?.signal === catalogSignal)).toBe(true);
     expect(priceCalls).toHaveLength(1);
     expect((priceCalls[0]?.[0] as URL).searchParams.get('ids')).toBe(

@@ -16,7 +16,11 @@ const GAME_SOFTWARE_FORMS = new Set([
   'HAC_AGB',
   'HAC_DMG',
   'HAC_VB',
-  'HAC_CGB'
+  'HAC_CGB',
+  'BEE_DL',
+  'BEE_DOWNLOADABLE',
+  'BEE_CARD',
+  'BEE_GC'
 ]);
 
 function nullableText(value: string | null | undefined): string | null {
@@ -26,7 +30,8 @@ function nullableText(value: string | null | undefined): string | null {
 
 function normalizeReleaseDate(item: JapanCatalogItem): string | null {
   const raw = nullableText(item.dsdate) ?? nullableText(item.sdate);
-  if (raw === null) return null;
+  // Unreleased titles may announce only a year ("2027"), which is not a release date yet.
+  if (raw === null || /^\d{4}$/.test(raw)) return null;
 
   const match = /^(\d{4})-(\d{2})-(\d{2})(?: 00:00:00)?$/.exec(raw)
     ?? /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/.exec(raw)
@@ -60,8 +65,8 @@ export function normalizeJapanCatalogItem(item: JapanCatalogItem): CatalogItem {
     publisher: nullableText(item.maker),
     developer: null,
     description: nullableText(item.text),
-    imageUrl: imageHash === null
-      ? null
+    imageUrl: imageHash === null || imageHash.startsWith('https://')
+      ? imageHash
       : `https://img-eshop.cdn.nintendo.net/i/${imageHash}.jpg`,
     releaseDate: normalizeReleaseDate(item),
     productType: productType(item.sform),

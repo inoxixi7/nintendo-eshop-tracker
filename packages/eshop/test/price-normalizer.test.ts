@@ -190,11 +190,27 @@ describe('Nintendo JP raw price schema', () => {
     expect(NintendoPriceResponseSchema.safeParse(response([price])).success).toBe(false);
   });
 
-  it('requires regular_price for every status except not_found', () => {
+  it('requires regular_price for every status except not_found and unreleased', () => {
     expect(NintendoPriceResponseSchema.safeParse(response([{
       title_id: 70010000009999,
-      sales_status: 'unreleased'
+      sales_status: 'onsale'
     }])).success).toBe(false);
+  });
+
+  it.each([
+    ['unreleased without a price', { sales_status: 'unreleased' }],
+    ['sales_termination without a price', { sales_status: 'sales_termination' }],
+    ['not_found with a JPY 0 stub', {
+      sales_status: 'not_found',
+      regular_price: { amount: '0円', currency: 'JPY', raw_value: '0' }
+    }]
+  ])('emits %s only as an unavailable source ID', (_label, fields) => {
+    const result = normalizeNintendoPriceResponse(NintendoPriceResponseSchema.parse(response([{
+      title_id: 70010000009999,
+      ...fields
+    }])), OBSERVED_AT);
+
+    expect(result).toEqual({ observations: [], unavailableSourceIds: ['70010000009999'] });
   });
 
   it.each([

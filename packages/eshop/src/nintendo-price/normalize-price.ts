@@ -10,7 +10,7 @@ import type {
 type NintendoPrice = NintendoPriceResponse['prices'][number];
 
 function isAvailablePrice(price: NintendoPrice): price is NintendoAvailablePrice {
-  return price.sales_status !== 'not_found';
+  return price.sales_status !== 'not_found' && price.regular_price !== undefined;
 }
 
 export function normalizeNintendoPriceResponse(

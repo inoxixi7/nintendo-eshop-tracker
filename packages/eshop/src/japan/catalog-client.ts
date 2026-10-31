@@ -8,8 +8,12 @@ import {
 } from './catalog-schema.js';
 import { normalizeJapanCatalogItem } from './normalize-catalog-item.js';
 
+// Nintendo JP search codes: 1_HAC = Switch, 05_BEE = Switch 2. The API takes one per request.
+export type JapanHardware = '1_HAC' | '05_BEE';
+
 interface JapanCatalogClientOptions {
   fetch: FetchLike;
+  hardware?: JapanHardware;
 }
 
 const CATALOG_URL = 'https://search.nintendo.jp/nintendo_soft/search.json';
@@ -36,7 +40,7 @@ export class JapanCatalogClient {
     }
 
     const url = new URL(CATALOG_URL);
-    url.searchParams.set('opt_hard', '1_HAC');
+    url.searchParams.set('opt_hard', this.options.hardware ?? '1_HAC');
     url.searchParams.set('limit', '400');
     url.searchParams.set('page', String(page));
     url.searchParams.set('sort', 'hdate desc');
