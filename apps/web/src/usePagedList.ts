@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { ApiError, type Listing, type Page } from './api';
+import { t } from './i18n';
 
 export function usePagedList(fetchPage: (page: number) => Promise<Page<Listing>>) {
   const items = ref<Listing[]>([]);
@@ -21,7 +22,7 @@ export function usePagedList(fetchPage: (page: number) => Promise<Page<Listing>>
       total.value = result.total;
       page = next;
     } catch (cause) {
-      if (current === generation) error.value = cause instanceof ApiError ? cause.message : '加载失败';
+      if (current === generation) error.value = cause instanceof ApiError ? cause.message : t('feed.failed');
     } finally {
       if (current === generation) loading.value = false;
     }

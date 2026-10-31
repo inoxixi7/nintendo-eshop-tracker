@@ -4,10 +4,19 @@ import { searchTokens } from '@eshop-tracker/shared';
 export type Platform = 'switch' | 'switch2';
 export type ProductType = 'game' | 'bundle' | 'dlc' | 'unknown';
 
+/** Nintendo Japan's own genre names, as its catalog sends them. */
+export const GENRES = [
+  'アクション', 'アドベンチャー', 'アーケード', 'パズル', 'シミュレーション', 'ロールプレイング', 'ストラテジー',
+  'シューティング', 'パーティー', 'テーブル', 'レース', 'スポーツ', '格闘', '音楽', 'コミュニケーション',
+  '学習', 'トレーニング', '実用', 'その他'
+] as const;
+export type Genre = (typeof GENRES)[number];
+
 export interface ListingFilters {
   readonly q?: string | undefined;
   readonly platform?: Platform | undefined;
   readonly type?: ProductType | undefined;
+  readonly genre?: Genre | undefined;
   readonly onSale?: boolean | undefined;
   readonly minDiscountPercent?: number | undefined;
   readonly sort: 'releaseDate' | 'title' | 'discount' | 'endingSoon';
@@ -44,6 +53,7 @@ export interface ListingDto {
 export interface ListingDetailDto extends ListingDto {
   readonly productCode: string | null;
   readonly description: string | null;
+  readonly genres: string[];
   readonly lastSeenAt: string;
 }
 
@@ -145,6 +155,8 @@ export async function listListings(
   }
   if (filters.platform !== undefined) where.push(`l.platform = ${bind(filters.platform)}`);
   if (filters.type !== undefined) where.push(`l.product_type = ${bind(filters.type)}`);
+  // shortcut: genres are read from the JP catalog payload; move them to a column when another region needs them
+  if (filters.genre !== undefined) where.push(`l.source_payload->'genre' ? ${bind(filters.genre)}`);
   if (filters.onSale === true) where.push(`(${ACTIVE_DISCOUNT})`);
   if (filters.onSale === false) where.push(`NOT COALESCE(${ACTIVE_DISCOUNT}, FALSE)`);
   if (filters.minDiscountPercent !== undefined) {
@@ -168,7 +180,8 @@ export async function listListings(
 
 export async function getListing(db: QueryClient, id: string, now = new Date()): Promise<ListingDetailDto | null> {
   const result = await db.query(
-    `SELECT ${LISTING_COLUMNS}, l.product_code, l.description, l.last_seen_at
+    `SELECT ${LISTING_COLUMNS}, l.product_code, l.description, l.last_seen_at,
+       CASE WHEN jsonb_typeof(l.source_payload->'genre') = 'array' THEN l.source_payload->'genre' END AS genres
      FROM regional_listings l LEFT JOIN current_prices p ON p.regional_listing_id = l.id
      WHERE l.id = $1`,
     [id]
@@ -179,6 +192,7 @@ export async function getListing(db: QueryClient, id: string, now = new Date()):
     ...listingFrom(row, now),
     productCode: text(row.product_code),
     description: text(row.description),
+    genres: Array.isArray(row.genres) ? row.genres.filter((genre): genre is string => typeof genre === 'string') : [],
     lastSeenAt: iso(row.last_seen_at) ?? ''
   };
 }

@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { api, type Health } from './api';
 import { formatTokyo } from './format';
+import { t } from './i18n';
 
 const health = ref<Health | null>(null);
 
@@ -13,8 +14,7 @@ onMounted(async () => {
 <template>
   <div v-if="health?.stale" class="page" style="padding-bottom: 0; min-height: 0">
     <p class="stale" role="status">
-      价格可能不是最新的：最近一次成功更新于
-      {{ health.lastSuccessfulSync.JP.prices ? formatTokyo(health.lastSuccessfulSync.JP.prices) : '从未' }}（东京时间）
+      {{ t('stale.banner', { time: health.lastSuccessfulSync.JP.prices ? formatTokyo(health.lastSuccessfulSync.JP.prices) : t('stale.never') }) }}
     </p>
   </div>
   <RouterView v-slot="{ Component }">
@@ -24,18 +24,18 @@ onMounted(async () => {
     </KeepAlive>
   </RouterView>
   <!-- the detail page has its own purchase bar in this spot -->
-  <nav v-if="!$route.path.startsWith('/listing/')" class="tabs" aria-label="主导航">
+  <nav v-if="!$route.path.startsWith('/listing/')" class="tabs" :aria-label="t('nav.main')">
     <RouterLink to="/" class="tab" exact-active-class="on">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>
-      <span>折扣</span>
+      <span>{{ t('nav.deals') }}</span>
     </RouterLink>
     <RouterLink to="/search" class="tab" active-class="on">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-      <span>搜索</span>
+      <span>{{ t('nav.search') }}</span>
     </RouterLink>
     <RouterLink to="/favorites" class="tab" active-class="on">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" /></svg>
-      <span>收藏</span>
+      <span>{{ t('nav.favorites') }}</span>
     </RouterLink>
   </nav>
 </template>

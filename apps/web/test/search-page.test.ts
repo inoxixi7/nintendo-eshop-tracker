@@ -7,7 +7,7 @@ vi.mock('../src/api', async (original) => ({ ...(await original<typeof import('.
 
 describe('SearchPage', () => {
   beforeEach(() => {
-    const store = new Map<string, string>([['eshop-tracker:search-history', JSON.stringify(['ゼルダ'])]]);
+    const store = new Map<string, string>([['eshop-tracker:search-history', JSON.stringify(['ゼルダ'])], ['eshop-tracker:locale', 'zh']]);
     vi.stubGlobal('localStorage', { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => { store.set(key, value); } });
     vi.resetModules();
     listings.mockClear();

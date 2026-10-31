@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import type { PricePoint } from '../api';
 import { formatTokyoDate, formatYen } from '../format';
+import { t } from '../i18n';
 
 const props = defineProps<{ points: PricePoint[]; now?: Date }>();
 
@@ -39,11 +40,11 @@ const chart = computed(() => {
 
 <template>
   <figure v-if="chart" class="chart">
-    <svg :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="`价格走势，最低 ${formatYen(chart.min)}，最高 ${formatYen(chart.max)}`">
+    <svg :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="t('chart.aria', { min: formatYen(chart.min), max: formatYen(chart.max) })">
       <line :x1="PAD.left" :x2="W - PAD.right" :y1="chart.minY" :y2="chart.minY" class="floor" />
       <path :d="chart.d" class="line" />
       <text :x="PAD.left" :y="H - 6" class="axis">{{ chart.startLabel }}</text>
-      <text :x="W - PAD.right" :y="H - 6" class="axis" text-anchor="end">现在</text>
+      <text :x="W - PAD.right" :y="H - 6" class="axis" text-anchor="end">{{ t('chart.now') }}</text>
     </svg>
   </figure>
 </template>

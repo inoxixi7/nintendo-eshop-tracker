@@ -3,11 +3,10 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { api, ApiError, type ListingDetail, type PriceHistory } from '../api';
 import PriceChart from '../components/PriceChart.vue';
 import { isFavorite, toggleFavorite } from '../favorites';
-import { currentAmount, endsIn, formatTokyo, formatTokyoDate, formatYen, PLATFORM_LABEL, SALES_STATUS_LABEL } from '../format';
+import { currentAmount, endsIn, formatTokyo, formatTokyoDate, formatYen, PLATFORM_LABEL, salesStatusLabel } from '../format';
+import { genreLabel, t } from '../i18n';
 
 const props = defineProps<{ id: string }>();
-
-const TYPE_LABEL = { game: '游戏', bundle: '合集', dlc: '追加内容', unknown: '其他' } as const;
 
 const listing = ref<ListingDetail | null>(null);
 const history = ref<PriceHistory | null>(null);
@@ -23,7 +22,7 @@ watch(() => props.id, async (id) => {
   try {
     [listing.value, history.value] = await Promise.all([api.listing(id), api.history(id)]);
   } catch (cause) {
-    error.value = cause instanceof ApiError && cause.status === 404 ? '找不到这个商品' : (cause as Error).message;
+    error.value = cause instanceof ApiError && cause.status === 404 ? t('detail.notFound') : (cause as Error).message;
   }
 }, { immediate: true });
 
@@ -63,19 +62,19 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
 <template>
   <main class="detail">
     <header class="bar" :class="{ solid: scrolled }">
-      <button class="round" aria-label="返回" @click="$router.back()">
+      <button class="round" :aria-label="t('detail.back')" @click="$router.back()">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
       </button>
       <p class="bar-title" :aria-hidden="!scrolled">{{ listing?.title }}</p>
       <button v-if="listing" class="round" :class="{ on: isFavorite(listing.id) }" :aria-pressed="isFavorite(listing.id)"
-        :aria-label="isFavorite(listing.id) ? '取消收藏' : '收藏'" @click="toggleFavorite(listing.id)">
+        :aria-label="t(isFavorite(listing.id) ? 'detail.unfavorite' : 'detail.favorite')" @click="toggleFavorite(listing.id)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" /></svg>
       </button>
       <span v-else class="round-space" />
     </header>
 
     <p v-if="error" class="state error body" role="alert">{{ error }}</p>
-    <div v-else-if="!listing" class="stage" role="status" aria-label="加载中"><div class="cover skeleton" /></div>
+    <div v-else-if="!listing" class="stage" role="status" :aria-label="t('feed.loading')"><div class="cover skeleton" /></div>
     <article v-else>
       <div class="stage">
         <div v-if="listing.imageUrl" class="backdrop" :style="{ backgroundImage: `url(${listing.imageUrl})` }" />
@@ -86,21 +85,21 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
       <div class="body">
         <div class="tags">
           <span class="badge" :class="listing.platform">{{ PLATFORM_LABEL[listing.platform] }}</span>
-          <span v-if="listing.productType !== 'game'" class="badge">{{ TYPE_LABEL[listing.productType] }}</span>
-          <span v-if="!listing.isActive" class="badge">已从目录移除</span>
+          <span v-if="listing.productType !== 'game'" class="badge">{{ t(`type.${listing.productType}`) }}</span>
+          <span v-if="!listing.isActive" class="badge">{{ t('detail.removed') }}</span>
         </div>
         <h1 class="title">{{ listing.title }}</h1>
         <p v-if="listing.publisher" class="publisher">{{ listing.publisher }}</p>
 
-        <section v-if="listing.price && deal" class="card price" aria-label="价格">
-          <p v-if="listing.price.stale" class="stale">这个价格超过 12 小时没有更新</p>
+        <section v-if="listing.price && deal" class="card price" :aria-label="t('detail.price')">
+          <p v-if="listing.price.stale" class="stale">{{ t('stale.price') }}</p>
           <div class="price-row">
             <div>
-              <p class="label">{{ deal.onSale ? '折扣价' : '当前价格' }}</p>
+              <p class="label">{{ t(deal.onSale ? 'price.sale' : 'price.current') }}</p>
               <strong class="big yen" :class="{ sale: deal.onSale }">{{ formatYen(deal.now) }}</strong>
               <p v-if="deal.onSale" class="was">
                 <s>{{ formatYen(listing.price.regularAmountMinor) }}</s>
-                <span class="save">省 {{ formatYen(deal.saved) }}</span>
+                <span class="save">{{ t('price.save', { amount: formatYen(deal.saved) }) }}</span>
               </p>
             </div>
             <span v-if="deal.onSale" class="sticker big-sticker">-{{ listing.price.discountPercent }}%</span>
@@ -109,7 +108,7 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
           <div v-if="deal.endsIn" class="countdown" :class="{ urgent: deal.urgent }">
             <div class="countdown-text">
               <span>{{ deal.endsIn }}</span>
-              <span class="muted">{{ formatTokyo(listing.price.discountEndAt!) }} 截止</span>
+              <span class="muted">{{ t('price.ends', { time: formatTokyo(listing.price.discountEndAt!) }) }}</span>
             </div>
             <div v-if="deal.elapsed !== null" class="track" aria-hidden="true">
               <div class="fill" :style="{ width: `${(1 - deal.elapsed) * 100}%` }" />
@@ -118,63 +117,65 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
 
           <p v-if="deal.atLowest" class="verdict good">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg>
-            史低价：追踪以来最便宜的时候
+            {{ t('price.atLowest') }}
           </p>
           <p v-else-if="deal.aboveLowest !== null" class="verdict">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v5M12 16v.01" /></svg>
-            比史低 {{ formatYen(deal.lowest!) }} 贵 {{ formatYen(deal.aboveLowest) }}
+            {{ t('price.aboveLowest', { low: formatYen(deal.lowest!), diff: formatYen(deal.aboveLowest) }) }}
           </p>
         </section>
         <section v-else class="card empty-price">
-          <p class="label">暂无价格</p>
-          <p class="muted small">未定价、已停售或尚未上架</p>
+          <p class="label">{{ t('price.none') }}</p>
+          <p class="muted small">{{ t('price.noneSub') }}</p>
         </section>
 
         <section v-if="history && history.points.length > 0" class="card" aria-labelledby="trend">
-          <h2 id="trend">价格走势</h2>
+          <h2 id="trend">{{ t('detail.trend') }}</h2>
           <template v-if="changed">
             <div class="stats">
-              <div><span class="muted small">史低</span><strong class="yen good-ink">{{ formatYen(history.lowestAmountMinor!) }}</strong></div>
-              <div><span class="muted small">史高</span><strong class="yen">{{ formatYen(highest) }}</strong></div>
-              <div><span class="muted small">变动</span><strong>{{ history.points.length - 1 }} 次</strong></div>
+              <div><span class="muted small">{{ t('detail.lowest') }}</span><strong class="yen good-ink">{{ formatYen(history.lowestAmountMinor!) }}</strong></div>
+              <div><span class="muted small">{{ t('detail.highest') }}</span><strong class="yen">{{ formatYen(highest) }}</strong></div>
+              <div><span class="muted small">{{ t('detail.changes') }}</span><strong>{{ t('detail.changeCount', { n: history.points.length - 1 }) }}</strong></div>
             </div>
             <PriceChart :points="history.points" />
           </template>
           <p v-else class="flat">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16" /></svg>
-            <span>自 {{ formatTokyoDate(history.points[0]!.observedAt) }} 开始追踪，价格还没有变过。降价时这里会画出走势。</span>
+            <span>{{ t('detail.flat', { date: formatTokyoDate(history.points[0]!.observedAt) }) }}</span>
           </p>
         </section>
 
         <section class="card" aria-labelledby="info">
-          <h2 id="info">商品信息</h2>
+          <h2 id="info">{{ t('detail.info') }}</h2>
           <dl class="facts">
-            <div><dt>平台</dt><dd>{{ PLATFORM_LABEL[listing.platform] }}</dd></div>
-            <div><dt>类型</dt><dd>{{ TYPE_LABEL[listing.productType] }}</dd></div>
-            <div v-if="listing.publisher"><dt>发行商</dt><dd>{{ listing.publisher }}</dd></div>
-            <div v-if="listing.releaseDate"><dt>发售日</dt><dd>{{ formatTokyoDate(listing.releaseDate) }}</dd></div>
-            <div v-if="listing.price"><dt>销售状态</dt><dd>{{ SALES_STATUS_LABEL[listing.price.salesStatus] ?? listing.price.salesStatus }}</dd></div>
-            <div v-if="listing.productCode"><dt>商品编号</dt><dd class="mono">{{ listing.productCode }}</dd></div>
-            <div v-if="listing.price"><dt>价格更新</dt><dd>{{ formatTokyo(listing.price.observedAt) }}（东京）</dd></div>
+            <div v-if="listing.genres.length > 0" class="genre-row">
+              <dt>{{ t('detail.genres') }}</dt>
+              <dd class="genre-list"><span v-for="genre in listing.genres" :key="genre" class="genre">{{ genreLabel(genre) }}</span></dd>
+            </div>
+            <div><dt>{{ t('detail.platform') }}</dt><dd>{{ PLATFORM_LABEL[listing.platform] }}</dd></div>
+            <div><dt>{{ t('detail.type') }}</dt><dd>{{ t(`type.${listing.productType}`) }}</dd></div>
+            <div v-if="listing.publisher"><dt>{{ t('detail.publisher') }}</dt><dd>{{ listing.publisher }}</dd></div>
+            <div v-if="listing.releaseDate"><dt>{{ t('detail.release') }}</dt><dd>{{ formatTokyoDate(listing.releaseDate) }}</dd></div>
+            <div v-if="listing.price"><dt>{{ t('detail.status') }}</dt><dd>{{ salesStatusLabel(listing.price.salesStatus) }}</dd></div>
           </dl>
         </section>
 
         <section v-if="listing.description" class="card" aria-labelledby="about">
-          <h2 id="about">简介</h2>
+          <h2 id="about">{{ t('detail.about') }}</h2>
           <p class="desc" :class="{ clamped: !expanded }">{{ listing.description }}</p>
           <button v-if="listing.description.length > 120" class="more" :aria-expanded="expanded" @click="expanded = !expanded">
-            {{ expanded ? '收起' : '展开全文' }}
+            {{ t(expanded ? 'detail.collapse' : 'detail.expand') }}
           </button>
         </section>
       </div>
 
       <div v-if="listing.sourceUrl" class="buy">
         <div class="buy-price">
-          <strong class="yen" :class="{ sale: deal?.onSale }">{{ deal ? formatYen(deal.now) : '暂无价格' }}</strong>
+          <strong class="yen" :class="{ sale: deal?.onSale }">{{ deal ? formatYen(deal.now) : t('price.none') }}</strong>
           <span v-if="deal?.onSale" class="muted small">-{{ listing.price!.discountPercent }}%</span>
         </div>
         <a :href="listing.sourceUrl" target="_blank" rel="noopener" class="buy-button">
-          去 eShop 看看
+          {{ t('detail.buy') }}
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>
         </a>
       </div>
@@ -359,7 +360,9 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
 .facts div + div { border-top: 1px solid var(--line); }
 .facts dt { color: var(--muted); flex: none; }
 .facts dd { margin: 0; text-align: right; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+.genre-row { align-items: center; }
+.genre-list { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.genre { font-size: 12px; font-weight: 650; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); }
 
 .desc { white-space: pre-line; font-size: 14px; line-height: 1.8; color: var(--muted); margin: 0; }
 .desc.clamped { display: -webkit-box; -webkit-line-clamp: 5; line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }

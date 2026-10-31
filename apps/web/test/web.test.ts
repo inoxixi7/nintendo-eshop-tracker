@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { ApiError, type Listing, type Page } from '../src/api';
 import ListingFeed from '../src/components/ListingFeed.vue';
 import { endsIn, formatTokyo, formatYen } from '../src/format';
+import { genreLabel, locale, t } from '../src/i18n';
 import { usePagedList } from '../src/usePagedList';
 
 const listing: Listing = {
@@ -32,6 +33,9 @@ const listing: Listing = {
 
 const page = (items: Listing[], total = items.length): Page<Listing> => ({ items, total, page: 1, pageSize: 30 });
 
+// tests below switch languages; every test starts from Chinese
+beforeEach(() => { locale.value = 'zh'; });
+
 describe('format', () => {
   it('shows UTC sale ends in Tokyo time', () => {
     expect(formatTokyo('2026-10-31T14:59:59Z')).toContain('23:59');
@@ -46,6 +50,19 @@ describe('format', () => {
     expect(endsIn('2026-10-31T14:59:59Z', now)).toBe('2 小时后结束');
     expect(endsIn('2026-11-04T12:00:00Z', now)).toBe('4 天后结束');
     expect(endsIn('2026-10-31T11:00:00Z', now)).toBe('已结束');
+  });
+
+  it('follows the chosen language', () => {
+    const now = new Date('2026-10-31T12:00:00Z');
+    locale.value = 'ja';
+    expect(endsIn('2026-11-04T12:00:00Z', now)).toBe('あと 4 日');
+    expect(formatYen(0)).toBe('無料');
+    expect(genreLabel('ロールプレイング')).toBe('ロールプレイング');
+    locale.value = 'en';
+    expect(endsIn('2026-11-01T12:00:00Z', now)).toBe('1d left');
+    expect(t('search.empty', { q: 'zelda' })).toBe('No games found for “zelda”');
+    expect(genreLabel('ロールプレイング')).toBe('RPG');
+    expect(genreLabel('unknown genre')).toBe('unknown genre');
   });
 });
 

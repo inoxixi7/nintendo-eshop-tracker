@@ -1,3 +1,5 @@
+import { t, type Genre } from './i18n';
+
 export type Platform = 'switch' | 'switch2';
 export type ProductType = 'game' | 'bundle' | 'dlc' | 'unknown';
 
@@ -30,6 +32,7 @@ export interface Listing {
 export interface ListingDetail extends Listing {
   productCode: string | null;
   description: string | null;
+  genres: string[];
   lastSeenAt: string;
 }
 
@@ -76,20 +79,18 @@ async function get<T>(path: string, query: Query = {}): Promise<T> {
   try {
     response = await fetch(`/v1${path}${search}`);
   } catch {
-    throw new ApiError(0, '无法连接服务器，请检查网络或 Tailscale');
+    throw new ApiError(0, t('error.offline'));
   }
-  const body = await response.json().catch(() => null);
   if (!response.ok) {
-    if (response.status === 429) throw new ApiError(429, '请求太频繁了，请稍等一分钟再试');
-    throw new ApiError(response.status, body?.error?.message ?? `请求失败（${response.status}）`);
+    throw new ApiError(response.status, t(response.status === 429 ? 'error.rateLimited' : 'error.status', { status: response.status }));
   }
-  return body as T;
+  return (await response.json()) as T;
 }
 
 export const api = {
-  deals: (query: { platform?: Platform; type?: ProductType; minDiscountPercent?: number; sort?: 'discount' | 'endingSoon'; page?: number }) =>
+  deals: (query: { platform?: Platform; type?: ProductType; genre?: Genre; minDiscountPercent?: number; sort?: 'discount' | 'endingSoon'; page?: number }) =>
     get<Page<Listing>>('/deals', { pageSize: 30, ...query }),
-  listings: (query: { q?: string; platform?: Platform; type?: ProductType; onSale?: boolean; sort?: 'releaseDate' | 'title' | 'discount'; page?: number }) =>
+  listings: (query: { q?: string; platform?: Platform; type?: ProductType; genre?: Genre; onSale?: boolean; sort?: 'releaseDate' | 'title' | 'discount'; page?: number }) =>
     get<Page<Listing>>('/listings', { pageSize: 30, ...query }),
   listing: (id: string) => get<ListingDetail>(`/listings/${encodeURIComponent(id)}`),
   history: (id: string) => get<PriceHistory>(`/listings/${encodeURIComponent(id)}/price-history`),

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
 import { api, type Platform } from '../api';
+import GenreChips from '../components/GenreChips.vue';
 import ListingFeed from '../components/ListingFeed.vue';
+import { t, type Genre } from '../i18n';
 import { clearSearchHistory, forgetSearch, rememberSearch, searchHistory } from '../searchHistory';
 import { usePagedList } from '../usePagedList';
 
@@ -9,12 +11,13 @@ const SUGGESTIONS = ['塞尔达', 'Mario Kart', 'ポケモン', '星之卡比', 
 
 const input = ref('');
 const field = ref<HTMLInputElement | null>(null);
-const filters = reactive({ q: '', platform: 'all' as Platform | 'all', onSale: false });
+const filters = reactive({ q: '', platform: 'all' as Platform | 'all', genre: null as Genre | null, onSale: false });
 
 const feed = usePagedList((page) => api.listings({
   q: filters.q,
   ...(filters.platform === 'all' ? {} : { platform: filters.platform }),
   ...(filters.onSale ? { onSale: true } : {}),
+  ...(filters.genre === null ? {} : { genre: filters.genre }),
   type: 'game',
   page
 }));
@@ -53,30 +56,31 @@ function rememberOnOpen(event: MouseEvent) {
 <template>
   <main class="page">
     <header class="page-head">
-      <h1 class="page-title">搜索</h1>
+      <h1 class="page-title">{{ t('search.title') }}</h1>
     </header>
     <form class="bar" role="search" @submit.prevent="submit">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-      <input ref="field" v-model="input" type="search" placeholder="中文、English、日本語都可以" aria-label="搜索游戏"
+      <input ref="field" v-model="input" type="search" :placeholder="t('search.placeholder')" :aria-label="t('search.aria')"
         enterkeyhint="search" autocomplete="off" />
-      <button v-if="input" type="button" class="clear" aria-label="清除" @click="clear">✕</button>
+      <button v-if="input" type="button" class="clear" :aria-label="t('search.clear')" @click="clear">✕</button>
     </form>
 
     <template v-if="filters.q">
-      <div class="chips" role="toolbar" aria-label="筛选">
-        <div class="segmented" role="group" aria-label="平台">
+      <div class="chips" role="toolbar" :aria-label="t('filter.label')">
+        <div class="segmented" role="group" :aria-label="t('filter.platform')">
           <button v-for="option in (['all', 'switch2', 'switch'] as const)" :key="option"
             :class="{ on: filters.platform === option }" :aria-pressed="filters.platform === option"
             @click="filters.platform = option">
-            {{ option === 'switch2' ? 'Switch 2' : option === 'switch' ? 'Switch' : '全部' }}
+            {{ option === 'switch2' ? 'Switch 2' : option === 'switch' ? 'Switch' : t('filter.all') }}
           </button>
         </div>
-        <button class="chip" :class="{ on: filters.onSale }" :aria-pressed="filters.onSale" @click="filters.onSale = !filters.onSale">只看打折</button>
+        <button class="chip" :class="{ on: filters.onSale }" :aria-pressed="filters.onSale" @click="filters.onSale = !filters.onSale">{{ t('search.onSale') }}</button>
       </div>
+      <GenreChips v-model="filters.genre" />
       <div @click.capture="rememberOnOpen">
         <ListingFeed
           :items="feed.items.value" :total="feed.total.value" :loading="feed.loading.value" :error="feed.error.value"
-          :has-more="feed.hasMore()" :empty-text="`没有找到「${filters.q}」相关的游戏`"
+          :has-more="feed.hasMore()" :empty-text="t('search.empty', { q: filters.q })"
           @more="feed.loadMore" @retry="feed.reset"
         />
       </div>
@@ -84,8 +88,8 @@ function rememberOnOpen(event: MouseEvent) {
 
     <section v-else-if="searchHistory.length > 0" aria-labelledby="recent">
       <div class="section-head">
-        <h2 id="recent">最近搜索</h2>
-        <button class="link" @click="clearSearchHistory">清除</button>
+        <h2 id="recent">{{ t('search.recent') }}</h2>
+        <button class="link" @click="clearSearchHistory">{{ t('search.clear') }}</button>
       </div>
       <ul class="history">
         <li v-for="term in searchHistory" :key="term">
@@ -93,17 +97,17 @@ function rememberOnOpen(event: MouseEvent) {
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v4l2.5 2" /></svg>
             <span>{{ term }}</span>
           </button>
-          <button class="remove" :aria-label="`删除「${term}」`" @click="forgetSearch(term)">✕</button>
+          <button class="remove" :aria-label="t('search.remove', { term })" @click="forgetSearch(term)">✕</button>
         </li>
       </ul>
     </section>
 
     <section v-else aria-labelledby="try">
-      <div class="section-head"><h2 id="try">试试搜索</h2></div>
+      <div class="section-head"><h2 id="try">{{ t('search.try') }}</h2></div>
       <div class="suggest">
         <button v-for="term in SUGGESTIONS" :key="term" class="chip" @click="search(term)">{{ term }}</button>
       </div>
-      <p class="hint">同一款游戏用中文、英文或日文名都能找到，平假名和片假名也不用区分。</p>
+      <p class="hint">{{ t('search.hint') }}</p>
     </section>
   </main>
 </template>

@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import type { Listing } from '../api';
 import { currentAmount, endsIn, formatYen, PLATFORM_LABEL } from '../format';
+import { t } from '../i18n';
 
 const props = defineProps<{ listing: Listing }>();
 
@@ -26,7 +27,7 @@ const urgent = computed(() => {
       <strong class="yen" :class="{ sale: onSale }">{{ formatYen(currentAmount(listing.price)) }}</strong>
       <s v-if="onSale">{{ formatYen(listing.price.regularAmountMinor) }}</s>
     </div>
-    <div v-else class="price none">暂无价格</div>
+    <div v-else class="price none">{{ t('price.none') }}</div>
     <span class="platform" :class="listing.platform">{{ PLATFORM_LABEL[listing.platform] }}</span>
   </RouterLink>
 </template>

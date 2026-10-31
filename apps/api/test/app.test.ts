@@ -118,7 +118,8 @@ describe('GET /v1/listings', () => {
     ['pageSize above the maximum', 'pageSize=101', 'pageSize'],
     ['an unknown platform', 'platform=wii', 'platform'],
     ['an unknown parameter', 'debug=1', 'query'],
-    ['a non-boolean onSale', 'onSale=yes', 'onSale']
+    ['a non-boolean onSale', 'onSale=yes', 'onSale'],
+    ['an unknown genre', 'genre=horror', 'genre']
   ])('rejects %s with the shared error format', async (_label, query, field) => {
     const { db, calls } = listingsDb();
     const response = await buildApp(db).inject(`/v1/listings?${query}`);
@@ -143,6 +144,14 @@ describe('GET /v1/deals', () => {
     expect(calls[1]?.sql).toMatch(/ORDER BY p\.discount_end_at ASC NULLS LAST/);
     expect(calls[1]?.values).toEqual([50, 20, 0]);
   });
+
+  it('filters by a Nintendo genre', async () => {
+    const { db, calls } = listingsDb();
+    await buildApp(db).inject(`/v1/deals?genre=${encodeURIComponent('ロールプレイング')}`);
+
+    expect(calls[1]?.sql).toContain(`l.source_payload->'genre' ? $1`);
+    expect(calls[1]?.values.slice(0, 1)).toEqual(['ロールプレイング']);
+  });
 });
 
 describe('GET /v1/listings/:id', () => {
@@ -151,11 +160,12 @@ describe('GET /v1/listings/:id', () => {
       ...listingRow,
       product_code: 'BEE-P-AAAAA',
       description: 'A surfing adventure',
+      genres: ['アドベンチャー', 'アクション'],
       last_seen_at: RECENT
     }]);
     const body = (await buildApp(db).inject(`/v1/listings/${ID}`)).json();
 
-    expect(body).toMatchObject({ id: ID, productCode: 'BEE-P-AAAAA', lastSeenAt: RECENT.toISOString() });
+    expect(body).toMatchObject({ id: ID, productCode: 'BEE-P-AAAAA', genres: ['アドベンチャー', 'アクション'], lastSeenAt: RECENT.toISOString() });
   });
 
   it('rejects a malformed id before querying', async () => {

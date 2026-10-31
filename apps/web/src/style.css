@@ -20,25 +20,24 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f0f11;
-    --surface: #1b1b1f;
-    --surface-2: #26262b;
-    --text: #f3f2ef;
-    --muted: #a19d96;
-    --line: #2f2f35;
-    --accent: #ff3b47;
-    --accent-soft: #3a1418;
-    --sale: #ff4d58;
-    --good: #4fd19a;
-    --good-soft: #12301f;
-    --warn-bg: #3a2f12;
-    --warn-ink: #ffd679;
-    --switch2: #f3f2ef;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
-    color-scheme: dark;
-  }
+/* index.html sets data-theme before first paint (saved choice, else the system setting) */
+:root[data-theme="dark"] {
+  --bg: #0f0f11;
+  --surface: #1b1b1f;
+  --surface-2: #26262b;
+  --text: #f3f2ef;
+  --muted: #a19d96;
+  --line: #2f2f35;
+  --accent: #ff3b47;
+  --accent-soft: #3a1418;
+  --sale: #ff4d58;
+  --good: #4fd19a;
+  --good-soft: #12301f;
+  --warn-bg: #3a2f12;
+  --warn-ink: #ffd679;
+  --switch2: #f3f2ef;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -64,6 +63,7 @@ button { cursor: pointer; }
 }
 
 .page-head { margin: 12px 0 14px; }
+.page-head.with-actions { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 
 .page-title {
   font-size: 30px;

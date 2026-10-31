@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Listing } from '../api';
-import { currentAmount, endsIn, formatYen, PLATFORM_LABEL, SALES_STATUS_LABEL } from '../format';
+import { currentAmount, endsIn, formatYen, PLATFORM_LABEL, salesStatusLabel } from '../format';
+import { t } from '../i18n';
 
 defineProps<{ listing: Listing }>();
 </script>
@@ -18,7 +19,7 @@ defineProps<{ listing: Listing }>();
           {{ endsIn(listing.price.discountEndAt) }}
         </span>
         <span v-else-if="listing.price && listing.price.salesStatus !== 'onsale'">
-          {{ SALES_STATUS_LABEL[listing.price.salesStatus] ?? listing.price.salesStatus }}
+          {{ salesStatusLabel(listing.price.salesStatus) }}
         </span>
       </div>
       <div v-if="listing.price" class="price">
@@ -26,7 +27,7 @@ defineProps<{ listing: Listing }>();
         <strong class="yen" :class="{ sale: listing.price.discountPercent !== null }">{{ formatYen(currentAmount(listing.price)) }}</strong>
         <s v-if="listing.price.discountPercent !== null">{{ formatYen(listing.price.regularAmountMinor) }}</s>
       </div>
-      <div v-else class="price muted">暂无价格</div>
+      <div v-else class="price muted">{{ t('price.none') }}</div>
     </div>
   </RouterLink>
 </template>

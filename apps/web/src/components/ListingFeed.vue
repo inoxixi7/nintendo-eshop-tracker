@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Listing } from '../api';
+import { t } from '../i18n';
 import GameTile from './GameTile.vue';
 import ListingCard from './ListingCard.vue';
 
@@ -16,7 +17,7 @@ defineEmits<{ more: []; retry: [] }>();
 </script>
 
 <template>
-  <p v-if="items.length > 0" class="count">共 {{ total.toLocaleString() }} 件</p>
+  <p v-if="items.length > 0" class="count">{{ t('feed.total', { n: total.toLocaleString() }) }}</p>
   <ul :class="layout">
     <li v-for="listing in items" :key="listing.id">
       <GameTile v-if="layout === 'grid'" :listing="listing" />
@@ -30,11 +31,11 @@ defineEmits<{ more: []; retry: [] }>();
   </ul>
   <div v-if="error" class="state error" role="alert">
     {{ error }}
-    <button class="more" @click="$emit('retry')">重试</button>
+    <button class="more" @click="$emit('retry')">{{ t('feed.retry') }}</button>
   </div>
-  <p v-else-if="loading" class="state" :class="{ 'sr-only': items.length === 0 }" role="status">加载中…</p>
+  <p v-else-if="loading" class="state" :class="{ 'sr-only': items.length === 0 }" role="status">{{ t('feed.loading') }}</p>
   <p v-else-if="items.length === 0" class="state">{{ emptyText }}</p>
-  <button v-else-if="hasMore" class="more" @click="$emit('more')">加载更多</button>
+  <button v-else-if="hasMore" class="more" @click="$emit('more')">{{ t('feed.more') }}</button>
 </template>
 
 <style scoped>
