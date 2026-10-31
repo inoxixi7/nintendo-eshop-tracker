@@ -13,6 +13,7 @@
         "iurl": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "dsdate": "2026-08-21 00:00:00",
         "sform": "HAC_DL",
+        "hard": "1_HAC",
         "fixtureMarker": "game-extra"
       },
       {
@@ -25,6 +26,7 @@
         "iurl": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "sdate": "2026.8.27",
         "sform": "set",
+        "hard": "1_HAC",
         "fixtureMarker": "bundle-extra"
       },
       {
@@ -37,6 +39,7 @@
         "siurl": "   ",
         "iurl": null,
         "sform": "DLC",
+        "hard": "1_HAC",
         "fixtureMarker": "dlc-extra"
       },
       {
@@ -47,6 +50,7 @@
         "maker": "   ",
         "text": "   ",
         "sform": "mystery_form",
+        "hard": "1_HAC",
         "fixtureMarker": "unknown-extra"
       }
     ]

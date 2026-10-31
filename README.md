@@ -8,7 +8,7 @@ The first release is planned for the Japanese (JP), United States (US), and Unit
 
 Phase 3 adds PostgreSQL persistence, the durable JP synchronization worker, a daily catalog schedule, a six-hour price schedule, and a private Docker Compose deployment with daily retained backups.
 
-The JP catalog output contains price-addressable rows with Nintendo Store IDs. Search-only entries without an NSUID are skipped until the domain separates listing IDs from price IDs.
+The JP catalog covers Nintendo Switch (`1_HAC`) and Nintendo Switch 2 (`05_BEE`) listings; each row carries `platform` (`switch` or `switch2`). It contains price-addressable rows with Nintendo Store IDs. Search-only entries without an NSUID, and directory-only variants such as `70010000039949_2`, are skipped until the domain separates listing IDs from price IDs. Titles that are unreleased without an announced price, terminated, or not found are reported as unavailable rather than priced.
 
 HTTP API routes, Web/PWA, and WeChat Mini Program clients remain future work. The future API will read from the persisted database.
 

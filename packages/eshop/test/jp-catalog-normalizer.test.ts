@@ -18,6 +18,7 @@ function rawItem(overrides: Record<string, unknown> = {}) {
     id: 'synthetic-item',
     nsuid: '70010000009999',
     title: 'Synthetic Test Item',
+    hard: '1_HAC',
     ...overrides
   });
 }
@@ -44,6 +45,7 @@ describe('Japanese catalog normalization', () => {
         imageUrl: 'https://img-eshop.cdn.nintendo.net/i/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
         releaseDate: '2026-08-21',
         productType: 'game',
+        platform: 'switch',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000001',
         sourcePayload: expect.objectContaining({ fixtureMarker: 'game-extra' })
       },
@@ -59,6 +61,7 @@ describe('Japanese catalog normalization', () => {
         imageUrl: 'https://img-eshop.cdn.nintendo.net/i/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.jpg',
         releaseDate: '2026-08-27',
         productType: 'bundle',
+        platform: 'switch',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000002',
         sourcePayload: expect.objectContaining({ fixtureMarker: 'bundle-extra' })
       },
@@ -74,6 +77,7 @@ describe('Japanese catalog normalization', () => {
         imageUrl: null,
         releaseDate: null,
         productType: 'dlc',
+        platform: 'switch',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000003',
         sourcePayload: expect.objectContaining({ fixtureMarker: 'dlc-extra' })
       },
@@ -89,6 +93,7 @@ describe('Japanese catalog normalization', () => {
         imageUrl: null,
         releaseDate: null,
         productType: 'unknown',
+        platform: 'switch',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000004',
         sourcePayload: expect.objectContaining({ fixtureMarker: 'unknown-extra' })
       }
@@ -172,7 +177,11 @@ describe('Japanese catalog normalization', () => {
       '../',
       `${'a'.repeat(31)}\u0000${'a'.repeat(32)}`,
       `${'a'.repeat(31)} ${'a'.repeat(32)}`,
-      'A'.repeat(64)
+      'A'.repeat(64),
+      'http://www.nintendo.com/jp/data/img/hero/x.jpg',
+      'https://evil.example/x.jpg',
+      'https://nintendo.com.evil.example/x.jpg',
+      '/software/feature/nintendo-classics/detail/img/x.jpg'
     ];
 
     for (const value of invalidHashes) {
@@ -193,6 +202,12 @@ describe('Japanese catalog normalization', () => {
     );
   });
 
+  it('keeps a Nintendo-hosted absolute image URL as is', () => {
+    const url = 'https://www.nintendo.com/jp/data/img/hero/dk_bananza_dlc_s.jpg';
+
+    expect(normalizeJapanCatalogItem(rawItem({ siurl: url })).imageUrl).toBe(url);
+  });
+
   it.each([
     ['missing result', { status: 0 }],
     ['missing total', { result: { items: [] } }],
@@ -201,6 +216,15 @@ describe('Japanese catalog normalization', () => {
   ])('rejects a malformed page envelope with %s', (_name, page) => {
     expect(JapanCatalogPageSchema.safeParse(page).success).toBe(false);
   });
+
+  it.each(['70010000039949_2', '70010000012085_sora', '4039'])(
+    'treats directory-only NSUID variant %s as unpriceable',
+    (nsuid) => {
+      const parsed = JapanCatalogPageSchema.parse(pageWithItems([{ id: nsuid, nsuid, title: 'Variant' }]));
+
+      expect(parsed.result.items[0]?.nsuid).toBeNull();
+    }
+  );
 
   it('accepts a live-shaped unpriceable directory row without validating its ignored image path', () => {
     const unpriceable = {
@@ -246,6 +270,26 @@ describe('Japanese catalog normalization', () => {
     ['2026-08-07', { sdate: '2026-8-7' }]
   ])('normalizes a supported release date shape to %s', (expected, dateFields) => {
     expect(normalizeJapanCatalogItem(rawItem(dateFields)).releaseDate).toBe(expected);
+  });
+
+  it.each([
+    ['1_HAC', 'switch'],
+    ['05_BEE', 'switch2']
+  ])('maps hardware %s to platform %s', (hard, platform) => {
+    expect(normalizeJapanCatalogItem(rawItem({ hard })).platform).toBe(platform);
+  });
+
+  it('rejects a priceable row without a known hardware code', () => {
+    expect(JapanCatalogItemSchema.safeParse({
+      id: 'synthetic-item',
+      nsuid: '70010000009999',
+      title: 'Synthetic Test Item',
+      hard: '2_CTR'
+    }).success).toBe(false);
+  });
+
+  it('treats a year-only announcement as an unknown release date', () => {
+    expect(normalizeJapanCatalogItem(rawItem({ dsdate: '', sdate: '2027' })).releaseDate).toBeNull();
   });
 
   it('prefers a valid dsdate over sdate', () => {
@@ -299,6 +343,10 @@ describe('Japanese catalog normalization', () => {
     ['HAC_DMG', 'game'],
     ['HAC_VB', 'game'],
     ['HAC_CGB', 'game'],
+    ['BEE_DL', 'game'],
+    ['BEE_DOWNLOADABLE', 'game'],
+    ['BEE_CARD', 'game'],
+    ['BEE_GC', 'game'],
     ['HAC_DLC', 'unknown'],
     ['HAC_FUTURE', 'unknown'],
     ['HAC_DOWNLOAD', 'unknown'],

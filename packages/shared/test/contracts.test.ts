@@ -18,6 +18,7 @@ const validCatalogItem = {
   imageUrl: 'https://example.com/game.jpg',
   releaseDate: '2026-08-10',
   productType: 'game',
+  platform: 'switch',
   sourceUrl: 'https://example.com/game',
   sourcePayload: { originalTitle: 'Sample Game' }
 };

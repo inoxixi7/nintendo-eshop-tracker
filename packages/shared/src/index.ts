@@ -7,8 +7,10 @@ export {
 export {
   CatalogItemSchema,
   ProductTypeSchema,
+  PlatformSchema,
   type CatalogItem,
-  type ProductType
+  type ProductType,
+  type Platform
 } from './catalog-item.js';
 export {
   PriceObservationSchema,

@@ -17,6 +17,7 @@ function rawItem(index: number, overrides: Record<string, unknown> = {}) {
     siurl: IMAGE_HASH,
     dsdate: '2026-08-11',
     sform: 'HAC_DL',
+    hard: '1_HAC',
     ...overrides
   };
 }
@@ -112,6 +113,15 @@ describe('JapanCatalogClient.fetchPage', () => {
     expect(receivedUrl.searchParams.get('page')).toBe('7');
     expect(receivedUrl.searchParams.get('sort')).toBe('hdate desc');
     expect(receivedInit?.signal).toBe(signal);
+  });
+
+  it('requests the configured Switch 2 hardware code', async () => {
+    const fetch = vi.fn<FetchLike>(async () => jsonResponse(page(0, [])));
+    const client = new JapanCatalogClient({ fetch, hardware: '05_BEE' });
+
+    await client.fetchPage(1);
+
+    expect((fetch.mock.calls[0]![0] as URL).searchParams.get('opt_hard')).toBe('05_BEE');
   });
 
   it('wraps a malformed catalog envelope with a stable public message and cause', async () => {

@@ -26,12 +26,21 @@ const AvailablePriceSchema = z.object({
   discount_price: DiscountMoneySchema.optional()
 }).loose();
 
-const UnavailablePriceSchema = z.object({
-  title_id: TitleIdSchema,
-  sales_status: z.literal('not_found'),
-  regular_price: z.never().optional(),
-  discount_price: z.never().optional()
-}).loose();
+// Unreleased or terminated titles may carry no price; not_found may carry a JPY 0 stub. All are unpriced.
+const UnavailablePriceSchema = z.union([
+  z.object({
+    title_id: TitleIdSchema,
+    sales_status: z.enum(['not_found', 'unreleased', 'sales_termination']),
+    regular_price: z.never().optional(),
+    discount_price: z.never().optional()
+  }).loose(),
+  z.object({
+    title_id: TitleIdSchema,
+    sales_status: z.literal('not_found'),
+    regular_price: MoneySchema.extend({ raw_value: z.literal('0') }),
+    discount_price: z.never().optional()
+  }).loose()
+]);
 
 export const NintendoPriceResponseSchema = z.object({
   country: z.literal('JP'),
