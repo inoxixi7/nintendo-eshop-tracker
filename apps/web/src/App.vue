@@ -11,7 +11,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="health?.stale" class="page" style="padding-bottom: 0">
+  <div v-if="health?.stale" class="page" style="padding-bottom: 0; min-height: 0">
     <p class="stale" role="status">
       价格可能不是最新的：最近一次成功更新于
       {{ health.lastSuccessfulSync.JP.prices ? formatTokyo(health.lastSuccessfulSync.JP.prices) : '从未' }}（东京时间）
@@ -42,37 +42,43 @@ onMounted(async () => {
 <style scoped>
 .tabs {
   position: fixed;
-  inset: auto 0 0 0;
+  inset: auto 0 calc(12px + env(safe-area-inset-bottom));
+  width: fit-content;
+  margin: 0 auto;
   display: flex;
-  justify-content: space-around;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: saturate(1.6) blur(14px);
-  -webkit-backdrop-filter: saturate(1.6) blur(14px);
-  border-top: 1px solid var(--line);
-  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+  gap: 4px;
+  padding: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: saturate(1.6) blur(16px);
+  -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.16), 0 0 0 1px var(--line);
   z-index: 10;
 }
 
 .tab {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: 72px;
-  padding: 4px 0;
-  font-size: 11px;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
   color: var(--muted);
+  transition: background 150ms ease, color 150ms ease;
 }
 
 .tab svg {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 
-.tab.on { color: var(--accent); font-weight: 600; }
+.tab.on { background: var(--accent); color: var(--accent-ink); }
 </style>

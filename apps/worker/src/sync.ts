@@ -1,6 +1,6 @@
 import type { EshopAdapter, PriceFetchResult } from '@eshop-tracker/eshop';
 import { EshopError } from '@eshop-tracker/eshop';
-import type { CountryCode, PriceObservation } from '@eshop-tracker/shared';
+import type { CountryCode, PriceObservation, TitleAlias } from '@eshop-tracker/shared';
 import type { JobType, SyncRunResult, TrackerRepository } from '@eshop-tracker/database';
 import { withRetry, type RetryOptions } from './retry.js';
 
@@ -14,6 +14,8 @@ export interface SyncOptions {
   now: () => Date;
   retry?: Omit<RetryOptions, 'signal'>;
   signal?: AbortSignal;
+  /** Other-language titles for search; refreshed after each catalog sync when provided. */
+  fetchTitleAliases?: (signal?: AbortSignal) => Promise<TitleAlias[]>;
 }
 
 export interface SyncSummary {
@@ -37,6 +39,8 @@ interface SyncProgress {
 const FAILURE_CODE = 'SYNC_FAILURE';
 const PARTIAL_CODE = 'UNAVAILABLE_LISTINGS';
 const PARTIAL_MESSAGE = 'One or more requested listings were unavailable upstream';
+const ALIASES_CODE = 'TITLE_ALIASES_FAILED';
+const ALIASES_MESSAGE = 'Catalog saved; other-language titles were not refreshed';
 
 function assertSource(source: string, name: string): void {
   if (typeof source !== 'string' || source.trim().length === 0) {
@@ -223,6 +227,22 @@ export function runCatalogSync(options: SyncOptions): Promise<SyncSummary> {
     }
     const itemsWritten = await options.repository.upsertCatalog(items, startedAt);
     progress.itemsWritten = itemsWritten;
+    if (options.fetchTitleAliases !== undefined) {
+      const fetchAliases = options.fetchTitleAliases;
+      try {
+        const aliases = await withRetry(() => fetchAliases(options.signal), retryOptions(options));
+        await options.repository.replaceTitleAliases(aliases);
+      } catch (error) {
+        if (options.signal?.aborted === true) throw error;
+        // Search keeps the previous aliases; the catalog itself is already saved.
+        return {
+          status: 'partial',
+          itemsRead: items.length,
+          itemsWritten,
+          result: { status: 'partial', itemsRead: items.length, itemsWritten, errorCode: ALIASES_CODE, errorMessage: ALIASES_MESSAGE }
+        };
+      }
+    }
     return {
       status: 'success',
       itemsRead: items.length,

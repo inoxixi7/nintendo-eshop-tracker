@@ -29,7 +29,7 @@ function createRepository(overrides: Partial<TrackerRepository> = {}): TrackerRe
     releaseJobLock: vi.fn(async () => undefined),
     startSyncRun: vi.fn(async () => 17),
     finishSyncRun: vi.fn(async () => undefined),
-    upsertCatalog: vi.fn(async () => 1),
+    upsertCatalog: vi.fn(async () => 1), replaceTitleAliases: vi.fn(async () => 0),
     activeSourceIds: vi.fn(async () => ['70010000000001']),
     recordPrices: vi.fn(async () => 1),
     close: vi.fn(async () => undefined),
@@ -72,6 +72,30 @@ describe('synchronization jobs', () => {
     });
     expect(vi.mocked(repository.releaseJobLock).mock.invocationCallOrder[0])
       .toBeGreaterThan(vi.mocked(repository.finishSyncRun).mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it('refreshes title aliases after the catalog is saved', async () => {
+    const repository = createRepository();
+    const aliases = [{ platform: 'switch' as const, productCore: 'AXN7', language: 'en' as const, title: 'Tears of the Kingdom' }];
+
+    await expect(runCatalogSync({ ...options(createAdapter(), repository), fetchTitleAliases: async () => aliases }))
+      .resolves.toMatchObject({ status: 'success' });
+    expect(repository.replaceTitleAliases).toHaveBeenCalledWith(aliases);
+    expect(vi.mocked(repository.replaceTitleAliases).mock.invocationCallOrder[0])
+      .toBeGreaterThan(vi.mocked(repository.upsertCatalog).mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it('keeps the catalog and reports partial when title aliases cannot be fetched', async () => {
+    const repository = createRepository();
+    const fetchTitleAliases = vi.fn(async () => { throw new Error('offline'); });
+
+    await expect(runCatalogSync({ ...options(createAdapter(), repository), fetchTitleAliases }))
+      .resolves.toMatchObject({ status: 'partial', itemsWritten: 1 });
+    expect(fetchTitleAliases).toHaveBeenCalled();
+    expect(repository.replaceTitleAliases).not.toHaveBeenCalled();
+    expect(repository.finishSyncRun).toHaveBeenCalledWith(17, expect.objectContaining({
+      status: 'partial', errorCode: 'TITLE_ALIASES_FAILED'
+    }));
   });
 
   it('passes an optional abort signal to both upstream adapter calls', async () => {

@@ -1,4 +1,5 @@
 import type { QueryClient } from '@eshop-tracker/database';
+import { searchTokens } from '@eshop-tracker/shared';
 
 export type Platform = 'switch' | 'switch2';
 export type ProductType = 'game' | 'bundle' | 'dlc' | 'unknown';
@@ -133,7 +134,15 @@ export async function listListings(
   const where = ["l.country = 'JP'", 'l.is_active = TRUE'];
   const bind = (value: unknown) => `$${values.push(value)}`;
 
-  if (filters.q !== undefined) where.push(`l.title ILIKE ${bind(`%${escapeLike(filters.q)}%`)}`);
+  if (filters.q !== undefined) {
+    const tokens = searchTokens(filters.q);
+    if (tokens.length === 0) where.push('FALSE');
+    // Each word must hit the Japanese title or a same-game title in another language.
+    for (const token of tokens) {
+      const pattern = bind(`%${escapeLike(token)}%`);
+      where.push(`(l.title_norm LIKE ${pattern} OR (l.platform, left(l.product_code, 4)) IN (SELECT platform, product_core FROM title_aliases WHERE title_norm LIKE ${pattern}))`);
+    }
+  }
   if (filters.platform !== undefined) where.push(`l.platform = ${bind(filters.platform)}`);
   if (filters.type !== undefined) where.push(`l.product_type = ${bind(filters.type)}`);
   if (filters.onSale === true) where.push(`(${ACTIVE_DISCOUNT})`);

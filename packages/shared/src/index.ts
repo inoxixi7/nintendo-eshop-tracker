@@ -21,3 +21,9 @@ export {
   effectiveAmountMinor,
   isOnSale
 } from './pricing.js';
+export {
+  normalizeSearchText,
+  productKey,
+  searchTokens,
+  type TitleAlias
+} from './search.js';

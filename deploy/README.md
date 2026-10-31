@@ -78,6 +78,12 @@ curl https://g3.tailde10b2.ts.net:8443/v1/health
 
 The same service serves the web app (`apps/web`, a PWA with deals, search, price history and on-device favorites) at `/`, so `https://g3.tailde10b2.ts.net:8443/` can be added to a phone's home screen.
 
+Search matches Japanese, English and Chinese names: each catalog sync also refreshes English titles from Nintendo of Europe's search index and Chinese titles from Nintendo HK/TW, joined by product code. If that fetch fails the catalog run is `partial` with `TITLE_ALIASES_FAILED` and the previous aliases stay. After deploying migration `002_search.sql`, run one catalog sync so existing listings get their search titles:
+
+```sh
+sudo docker compose exec worker node apps/worker/dist/main.js catalog
+```
+
 Prices are integer minor units with their currency; a discount is reported only while its window is open, and `stale` marks prices older than twelve hours. Public exposure needs rate limiting and CORS first.
 
 ## Backups and restore

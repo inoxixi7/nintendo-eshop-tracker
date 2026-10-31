@@ -293,6 +293,37 @@ describe('tracker repository', () => {
     expect(database.transactions).toHaveLength(0);
   });
 
+  it('stores the normalized search title with each listing', async () => {
+    const database = new FakeDatabase();
+    await createTrackerRepositoryWithDatabase(database).upsertCatalog([{ ...catalogItem, title: 'ゼルダの伝説' }], new Date());
+
+    expect(database.transactions[0]?.[1]?.values.at(-1)).toBe('ぜるだの传说');
+  });
+
+  it('replaces title aliases in one transaction, deduplicating and normalizing them', async () => {
+    const database = new FakeDatabase();
+    const repository = createTrackerRepositoryWithDatabase(database);
+
+    await expect(repository.replaceTitleAliases([
+      { platform: 'switch', productCore: 'AXN7', language: 'zh', title: '薩爾達傳說 王國之淚' },
+      { platform: 'switch', productCore: 'AXN7', language: 'zh', title: ' 薩爾達傳說 王國之淚 ' },
+      { platform: 'switch', productCore: 'AXN7', language: 'en', title: '— !' }
+    ])).resolves.toBe(1);
+
+    const [remove, insert] = database.transactions[0] ?? [];
+    expect(remove?.sql).toBe('DELETE FROM title_aliases');
+    expect(insert?.values).toEqual([['switch'], ['AXN7'], ['zh'], ['薩爾達傳說 王國之淚'], ['萨尔达传说王国之泪']]);
+  });
+
+  it('keeps existing aliases when the new set is empty or malformed', async () => {
+    const database = new FakeDatabase();
+    const repository = createTrackerRepositoryWithDatabase(database);
+
+    await expect(repository.replaceTitleAliases([])).rejects.toThrow(/empty set/);
+    await expect(repository.replaceTitleAliases([{ platform: 'switch', productCore: 'ax', language: 'en', title: 'x' }])).rejects.toThrow(/invalid/);
+    expect(database.transactions).toHaveLength(0);
+  });
+
   it('returns active source IDs in ascending order', async () => {
     const database = new FakeDatabase([[{ source_id: '2' }, { source_id: '10' }]]);
     const repository = createTrackerRepositoryWithDatabase(database);

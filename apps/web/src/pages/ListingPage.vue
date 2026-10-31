@@ -24,10 +24,18 @@ watch(() => props.id, async (id) => {
 </script>
 
 <template>
-  <main class="page">
-    <button class="back" @click="$router.back()">‹ 返回</button>
+  <main class="page detail">
+    <div class="top">
+      <button class="round" aria-label="返回" @click="$router.back()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+      </button>
+      <button v-if="listing" class="round" :class="{ on: isFavorite(listing.id) }" :aria-pressed="isFavorite(listing.id)"
+        :aria-label="isFavorite(listing.id) ? '取消收藏' : '收藏'" @click="toggleFavorite(listing.id)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" /></svg>
+      </button>
+    </div>
     <p v-if="error" class="state error" role="alert">{{ error }}</p>
-    <p v-else-if="!listing" class="state" role="status">加载中…</p>
+    <div v-else-if="!listing" class="hero skeleton" role="status" aria-label="加载中" />
     <article v-else>
       <img v-if="listing.imageUrl" :src="listing.imageUrl" alt="" class="hero" />
       <div class="head">
@@ -44,106 +52,128 @@ watch(() => props.id, async (id) => {
       <section v-if="listing.price" class="panel price">
         <p v-if="listing.price.stale" class="stale">这个价格超过 12 小时没有更新</p>
         <div class="row">
-          <span v-if="listing.price.discountPercent !== null" class="off">-{{ listing.price.discountPercent }}%</span>
-          <strong :class="{ sale: listing.price.discountPercent !== null }">{{ formatYen(currentAmount(listing.price)) }}</strong>
-          <s v-if="listing.price.discountPercent !== null">{{ formatYen(listing.price.regularAmountMinor) }}</s>
+          <strong class="yen" :class="{ sale: listing.price.discountPercent !== null }">{{ formatYen(currentAmount(listing.price)) }}</strong>
+          <span v-if="listing.price.discountPercent !== null" class="sticker">-{{ listing.price.discountPercent }}%</span>
         </div>
-        <p v-if="listing.price.discountEndAt && listing.price.discountPercent !== null" class="note">
-          折扣截止 {{ formatTokyo(listing.price.discountEndAt) }}（东京时间）
-        </p>
-        <p class="note">
-          {{ SALES_STATUS_LABEL[listing.price.salesStatus] ?? listing.price.salesStatus }}
-          · 更新于 {{ formatTokyo(listing.price.observedAt) }}
-        </p>
-        <p v-if="history?.lowestAmountMinor != null" class="note low">
-          记录内最低 {{ formatYen(history.lowestAmountMinor) }}
-          <template v-if="history.lowestAmountMinor >= currentAmount(listing.price)">（当前就是最低）</template>
-        </p>
+        <p v-if="listing.price.discountPercent !== null" class="regular">原价 <s>{{ formatYen(listing.price.regularAmountMinor) }}</s></p>
+        <div class="facts">
+          <span v-if="history?.lowestAmountMinor != null" class="pill" :class="{ good: history.lowestAmountMinor >= currentAmount(listing.price) }">
+            {{ history.lowestAmountMinor >= currentAmount(listing.price) ? '史低价' : `史低 ${formatYen(history.lowestAmountMinor)}` }}
+          </span>
+          <span v-if="listing.price.discountEndAt && listing.price.discountPercent !== null" class="pill">
+            截止 {{ formatTokyo(listing.price.discountEndAt) }}
+          </span>
+          <span class="pill">{{ SALES_STATUS_LABEL[listing.price.salesStatus] ?? listing.price.salesStatus }}</span>
+        </div>
+        <p class="note">东京时间 · 价格更新于 {{ formatTokyo(listing.price.observedAt) }}</p>
       </section>
       <section v-else class="panel"><p class="note">暂无价格（未定价、已停售或未上架）</p></section>
 
       <section v-if="history && history.points.length > 0" class="panel">
-        <h2>价格历史</h2>
+        <h2>价格走势</h2>
         <PriceChart :points="history.points" />
-        <p v-if="history.points.length === 1" class="note">追踪开始后价格还没有变化过。</p>
+        <p v-if="history.points.length === 1" class="note">开始追踪以来价格还没有变化。</p>
       </section>
 
-      <div class="actions">
-        <button class="action" :class="{ on: isFavorite(listing.id) }" :aria-pressed="isFavorite(listing.id)" @click="toggleFavorite(listing.id)">
-          {{ isFavorite(listing.id) ? '♥ 已收藏' : '♡ 收藏' }}
-        </button>
-        <a v-if="listing.sourceUrl" :href="listing.sourceUrl" target="_blank" rel="noopener" class="action primary">在 My Nintendo Store 打开</a>
-      </div>
+      <a v-if="listing.sourceUrl" :href="listing.sourceUrl" target="_blank" rel="noopener" class="cta">在 My Nintendo Store 打开</a>
 
-      <p v-if="listing.description" class="desc">{{ listing.description }}</p>
+      <details v-if="listing.description" class="panel desc">
+        <summary>简介</summary>
+        <p>{{ listing.description }}</p>
+      </details>
     </article>
   </main>
 </template>
 
 <style scoped>
-.back {
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font-size: 16px;
-  padding: 8px 0;
-  cursor: pointer;
+.detail { padding-top: calc(4px + env(safe-area-inset-top)); }
+
+.top {
+  position: sticky;
+  top: calc(8px + env(safe-area-inset-top));
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  height: 0;
 }
 
+.round {
+  width: 40px;
+  height: 40px;
+  margin: 10px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+}
+
+.round svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.round.on { color: var(--accent); }
+.round.on svg { fill: currentColor; }
+
 .hero {
+  display: block;
   width: 100%;
   aspect-ratio: 1;
-  max-height: 360px;
+  max-height: 420px;
   object-fit: cover;
   border-radius: var(--radius);
   background: var(--surface-2);
+  box-shadow: var(--shadow);
 }
 
-.head { display: flex; gap: 6px; margin-top: 12px; }
-.title { font-size: 21px; line-height: 1.35; margin: 8px 0 4px; }
-.sub { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+.head { display: flex; gap: 6px; margin-top: 16px; }
+.title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.35; margin: 8px 0 4px; }
+.sub { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
 
 .panel {
   background: var(--surface);
-  border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 16px;
   margin-bottom: 12px;
+  box-shadow: var(--shadow);
 }
 
-.panel h2 { font-size: 15px; margin: 0 0 8px; }
+.panel h2 { font-size: 15px; margin: 0 0 10px; }
 
-.row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
-.row strong { font-size: 28px; }
+.row { display: flex; align-items: center; gap: 12px; }
+.row strong { font-size: 36px; line-height: 1.1; }
 .row strong.sale { color: var(--sale); }
-.row s { color: var(--muted); }
+.row .sticker { font-size: 18px; }
+.regular { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
 
-.off {
-  background: var(--sale);
-  color: #fff;
-  font-weight: 800;
-  padding: 3px 8px;
-  border-radius: 8px;
+.facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+
+.pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
 }
 
-.note { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
-.note.low { color: var(--good); font-weight: 600; }
+.pill.good { background: var(--good-soft); color: var(--good); }
 
-.actions { display: flex; gap: 10px; margin-bottom: 16px; }
+.note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
 
-.action {
-  flex: 1;
+.cta {
+  display: block;
   text-align: center;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  border-radius: 12px;
-  padding: 12px;
-  font-size: 15px;
-  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 15px;
+  margin: 4px 0 14px;
+  box-shadow: 0 6px 16px rgb(230 0 18 / 0.25);
 }
 
-.action.on { color: var(--accent); border-color: var(--accent); }
-.action.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-
-.desc { white-space: pre-line; font-size: 14px; line-height: 1.7; color: var(--muted); }
+.desc summary { font-weight: 700; font-size: 15px; cursor: pointer; }
+.desc p { white-space: pre-line; font-size: 14px; line-height: 1.75; color: var(--muted); margin: 10px 0 0; }
 </style>

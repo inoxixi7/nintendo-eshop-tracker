@@ -1,4 +1,4 @@
-import type { CatalogItem, CountryCode, PriceObservation } from '@eshop-tracker/shared';
+import type { CatalogItem, CountryCode, PriceObservation, TitleAlias } from '@eshop-tracker/shared';
 import { PgDatabaseClient, type DatabaseClient, type QueryClient } from './database.js';
 import { loadMigrations, type Migration } from './migrations.js';
 
@@ -22,6 +22,8 @@ export interface TrackerRepository {
   activeSourceIds(country: CountryCode, source: string): Promise<string[]>;
   /** Older observations are ignored and are not included in the returned count. */
   recordPrices(observations: readonly PriceObservation[]): Promise<number>;
+  /** Replaces every alias in one transaction; returns the number stored. */
+  replaceTitleAliases(aliases: readonly TitleAlias[]): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -88,6 +90,10 @@ function readTimestamp(value: unknown): number {
 async function parseCatalog(items: readonly CatalogItem[]): Promise<CatalogItem[]> {
   const { CatalogItemSchema } = await import('@eshop-tracker/shared');
   return items.map((item) => CatalogItemSchema.parse(item));
+}
+
+async function searchNormalizer(): Promise<(text: string) => string> {
+  return (await import('@eshop-tracker/shared')).normalizeSearchText;
 }
 
 async function parseObservations(observations: readonly PriceObservation[]): Promise<PriceObservation[]> {
@@ -359,6 +365,7 @@ class PostgresTrackerRepository implements TrackerRepository {
       throw new Error('Catalog batch must contain the same country and source');
     }
 
+    const normalize = await searchNormalizer();
     return this.database.transaction(async (transaction) => {
       await transaction.query('SELECT pg_advisory_xact_lock($1, $2)', [PERSISTENCE_LOCK_NAMESPACE, countryLockId(first.country)]);
       let accepted = 0;
@@ -366,11 +373,12 @@ class PostgresTrackerRepository implements TrackerRepository {
         const upsert = await transaction.query(
           `INSERT INTO regional_listings (
              country, source, source_id, product_code, title, publisher, developer,
-             description, image_url, release_date, product_type, platform, source_url, source_payload, last_seen_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)
+             description, image_url, release_date, product_type, platform, source_url, source_payload, last_seen_at, title_norm
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16)
            ON CONFLICT (country, source, source_id) DO UPDATE SET
              product_code = EXCLUDED.product_code,
              title = EXCLUDED.title,
+             title_norm = EXCLUDED.title_norm,
              publisher = EXCLUDED.publisher,
              developer = EXCLUDED.developer,
              description = EXCLUDED.description,
@@ -388,7 +396,8 @@ class PostgresTrackerRepository implements TrackerRepository {
           [
             item.country, item.source, item.sourceId, item.productCode, item.title,
             item.publisher, item.developer, item.description, item.imageUrl, item.releaseDate,
-            item.productType, item.platform, item.sourceUrl, JSON.stringify(item.sourcePayload), seenAt
+            item.productType, item.platform, item.sourceUrl, JSON.stringify(item.sourcePayload), seenAt,
+            normalize(item.title)
           ]
         );
         accepted += upsert.rowCount ?? 0;
@@ -401,6 +410,42 @@ class PostgresTrackerRepository implements TrackerRepository {
         [first.country, first.source, seenAt]
       );
       return accepted;
+    });
+  }
+
+  replaceTitleAliases(aliases: readonly TitleAlias[]): Promise<number> {
+    return this.runOperation(() => this.replaceTitleAliasesInternal(aliases));
+  }
+
+  private async replaceTitleAliasesInternal(aliases: readonly TitleAlias[]): Promise<number> {
+    const normalize = await searchNormalizer();
+    const rows = new Map<string, TitleAlias & { titleNorm: string }>();
+    for (const alias of aliases) {
+      if (
+        !/^[A-Z0-9]{4}$/.test(alias.productCore)
+        || (alias.platform !== 'switch' && alias.platform !== 'switch2')
+        || (alias.language !== 'en' && alias.language !== 'zh')
+      ) {
+        throw new Error('Title alias has an invalid platform, product core or language');
+      }
+      const title = alias.title.trim();
+      const titleNorm = normalize(title);
+      if (titleNorm.length > 0) rows.set(JSON.stringify([alias.platform, alias.productCore, alias.language, title]), { ...alias, title, titleNorm });
+    }
+    const values = [...rows.values()];
+    // An empty fetch would wipe every alias; keep the previous set instead.
+    if (values.length === 0) throw new Error('Refusing to replace title aliases with an empty set');
+    return this.database.transaction(async (transaction) => {
+      await transaction.query('DELETE FROM title_aliases');
+      await transaction.query(
+        `INSERT INTO title_aliases (platform, product_core, language, title, title_norm)
+         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[])`,
+        [
+          values.map((row) => row.platform), values.map((row) => row.productCore), values.map((row) => row.language),
+          values.map((row) => row.title), values.map((row) => row.titleNorm)
+        ]
+      );
+      return values.length;
     });
   }
 

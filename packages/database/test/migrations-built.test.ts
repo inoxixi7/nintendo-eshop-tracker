@@ -23,7 +23,7 @@ describe('built database package', () => {
       ].join('\n');
       const result = await execFileAsync(process.execPath, ['--input-type=module', '--eval', script]);
 
-      expect(result.stdout.trim()).toBe('["001_initial.sql"]');
+      expect(result.stdout.trim()).toBe('["001_initial.sql","002_search.sql"]');
     } finally {
       await rm(isolatedRoot, { recursive: true, force: true });
     }

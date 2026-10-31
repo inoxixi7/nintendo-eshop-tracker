@@ -5,7 +5,7 @@ describe('database migrations', () => {
   it('loads the initial migration in lexical order with the tracker schema', async () => {
     const migrations = await loadMigrations();
 
-    expect(migrations.map(({ name }) => name)).toEqual(['001_initial.sql']);
+    expect(migrations.map(({ name }) => name)).toEqual(['001_initial.sql', '002_search.sql']);
 
     const sql = migrations[0]?.sql ?? '';
     expect(sql).toMatch(/CREATE TABLE regional_listings/i);
@@ -15,4 +15,9 @@ describe('database migrations', () => {
     expect(sql).toMatch(/UNIQUE\s*\(country,\s*source,\s*source_id\)/i);
   });
 
+  it('adds the search column and alias table', async () => {
+    const sql = (await loadMigrations())[1]?.sql ?? '';
+    expect(sql).toMatch(/ADD COLUMN title_norm text NOT NULL DEFAULT ''/);
+    expect(sql).toMatch(/CREATE TABLE title_aliases/);
+  });
 });

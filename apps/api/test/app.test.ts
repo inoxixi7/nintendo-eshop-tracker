@@ -99,11 +99,19 @@ describe('GET /v1/listings', () => {
     expect((await buildApp(db).inject('/v1/listings')).json().items[0].price).toBeNull();
   });
 
-  it('escapes LIKE wildcards in the search term', async () => {
+  it('matches every normalized word against titles and other-language aliases', async () => {
     const { db, calls } = listingsDb([]);
-    await buildApp(db).inject('/v1/listings?q=50%25_off');
+    await buildApp(db).inject(`/v1/listings?q=${encodeURIComponent('塞尔达  50%_off')}`);
 
-    expect(calls[0]?.values[0]).toBe('%50\\%\\_off%');
+    expect(calls[0]?.values.slice(0, 2)).toEqual(['%萨尔达%', '%50off%']);
+    expect(calls[0]?.sql).toMatch(/l\.title_norm LIKE \$1 OR \(l\.platform, left\(l\.product_code, 4\)\) IN \(SELECT platform, product_core FROM title_aliases WHERE title_norm LIKE \$1\)/);
+  });
+
+  it('matches nothing when the query has no searchable characters', async () => {
+    const { db, calls } = listingsDb([]);
+    await buildApp(db).inject('/v1/listings?q=%21%21');
+
+    expect(calls[0]?.sql).toMatch(/AND FALSE/);
   });
 
   it.each([

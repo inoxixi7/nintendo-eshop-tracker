@@ -242,6 +242,7 @@ it('keeps the root runtime surface minimal and stable', () => {
   expect(Object.keys(eshop).sort()).toEqual([
     'EshopError',
     'createJapanEshopAdapter',
+    'fetchTitleAliases',
     'validateCatalogBatch',
     'validatePriceBatch'
   ]);

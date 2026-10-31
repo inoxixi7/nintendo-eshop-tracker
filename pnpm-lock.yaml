@@ -23,6 +23,9 @@ importers:
       '@eshop-tracker/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@eshop-tracker/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/static':
         specifier: 10.1.6
         version: 10.1.6
@@ -96,6 +99,9 @@ importers:
 
   packages/shared:
     dependencies:
+      opencc-js:
+        specifier: 1.4.2
+        version: 1.4.2
       zod:
         specifier: 4.0.17
         version: 4.0.17
@@ -1837,6 +1843,9 @@ packages:
   on-exit-leak-free@2.1.2:
     resolution: {integrity: sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==}
     engines: {node: '>=14.0.0'}
+
+  opencc-js@1.4.2:
+    resolution: {integrity: sha512-EdcspgdROiCCZDM+jZR6Pa670xW+EW2QhctPBQ8gRjg6lrx4IHEl+2s+kt5izk/TkxVRgdWuFgaGkaEdIUfdaw==}
 
   own-keys@1.0.2:
     resolution: {integrity: sha512-19YVAg7T+WTrxggPukVq7DjTv6+PJ867TmhCvBsYwmbFCsZd344rq2Ld1p0wo8f8Qrrhgp82c6FJRqdXWtSEhg==}
@@ -4403,6 +4412,8 @@ snapshots:
       object-keys: 1.1.1
 
   on-exit-leak-free@2.1.2: {}
+
+  opencc-js@1.4.2: {}
 
   own-keys@1.0.2:
     dependencies:

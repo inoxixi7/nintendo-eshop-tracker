@@ -81,6 +81,42 @@ describe('favorites', () => {
   });
 });
 
+describe('search history', () => {
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value); }
+    });
+    vi.resetModules();
+  });
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('keeps the 10 most recent distinct searches, newest first, across reloads', async () => {
+    const history = await import('../src/searchHistory');
+    for (let n = 1; n <= 12; n += 1) history.rememberSearch(`game ${n}`);
+    history.rememberSearch('  GAME 5 ');
+    history.rememberSearch('   ');
+
+    vi.resetModules();
+    const reloaded = await import('../src/searchHistory');
+    expect(reloaded.searchHistory.value).toHaveLength(10);
+    expect(reloaded.searchHistory.value.slice(0, 2)).toEqual(['GAME 5', 'game 12']);
+    expect(reloaded.searchHistory.value.filter((term) => term.toLowerCase() === 'game 5')).toHaveLength(1);
+  });
+
+  it('removes one entry or clears all', async () => {
+    const history = await import('../src/searchHistory');
+    history.rememberSearch('a');
+    history.rememberSearch('b');
+    history.forgetSearch('a');
+    expect(history.searchHistory.value).toEqual(['b']);
+    history.clearSearchHistory();
+    expect(history.searchHistory.value).toEqual([]);
+  });
+});
+
 describe('usePagedList', () => {
   it('appends pages and reports when more exist', async () => {
     const fetchPage = vi.fn(async (n: number) => page([{ ...listing, id: String(n) }], 2));

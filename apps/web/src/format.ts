@@ -8,7 +8,7 @@ const date = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Tokyo', year: 'n
 
 // JPY has no minor unit, so the API's minor amount is already whole yen.
 export function formatYen(amountMinor: number): string {
-  return yen.format(amountMinor);
+  return amountMinor === 0 ? '免费' : yen.format(amountMinor);
 }
 
 export function currentAmount(price: Price): number {

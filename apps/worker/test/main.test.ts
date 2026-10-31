@@ -34,7 +34,7 @@ function createSignals() {
 function dependencies(overrides: Partial<WorkerMainDependencies> = {}) {
   const repository: TrackerRepository = {
     migrate: vi.fn(async () => undefined), tryJobLock: vi.fn(async () => true), releaseJobLock: vi.fn(async () => undefined),
-    startSyncRun: vi.fn(async () => 1), finishSyncRun: vi.fn(async () => undefined), upsertCatalog: vi.fn(async () => 0),
+    startSyncRun: vi.fn(async () => 1), finishSyncRun: vi.fn(async () => undefined), upsertCatalog: vi.fn(async () => 0), replaceTitleAliases: vi.fn(async () => 0),
     activeSourceIds: vi.fn(async () => []), recordPrices: vi.fn(async () => 0), close: vi.fn(async () => undefined)
   };
   const adapter = { country: 'JP' } as EshopAdapter;
