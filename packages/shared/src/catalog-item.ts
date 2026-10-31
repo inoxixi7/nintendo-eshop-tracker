@@ -4,6 +4,9 @@ import { CountryCodeSchema } from './country.js';
 export const ProductTypeSchema = z.enum(['game', 'bundle', 'dlc', 'unknown']);
 export type ProductType = z.infer<typeof ProductTypeSchema>;
 
+export const PlatformSchema = z.enum(['switch', 'switch2']);
+export type Platform = z.infer<typeof PlatformSchema>;
+
 type JsonValue = null | string | boolean | number | JsonValue[] | JsonObject;
 type JsonObject = { [key: string]: JsonValue };
 
@@ -100,6 +103,7 @@ export const CatalogItemSchema = z.object({
   imageUrl: HttpUrlSchema.nullable(),
   releaseDate: z.string().date().nullable(),
   productType: ProductTypeSchema,
+  platform: PlatformSchema,
   sourceUrl: HttpUrlSchema.nullable(),
   sourcePayload: JsonObjectSchema
 });

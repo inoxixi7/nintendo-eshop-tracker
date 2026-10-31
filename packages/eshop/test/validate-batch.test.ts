@@ -18,6 +18,7 @@ function catalogItem(overrides: Record<string, unknown> = {}) {
     imageUrl: 'https://example.com/image.jpg',
     releaseDate: '2026-08-10',
     productType: 'game',
+    platform: 'switch',
     sourceUrl: 'https://example.com/game-1',
     sourcePayload: { genre: 'action' },
     ...overrides

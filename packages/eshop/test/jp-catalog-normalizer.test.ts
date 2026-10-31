@@ -18,6 +18,7 @@ function rawItem(overrides: Record<string, unknown> = {}) {
     id: 'synthetic-item',
     nsuid: '70010000009999',
     title: 'Synthetic Test Item',
+    hard: '1_HAC',
     ...overrides
   });
 }
@@ -44,6 +45,7 @@ describe('Japanese catalog normalization', () => {
         imageUrl: 'https://img-eshop.cdn.nintendo.net/i/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
         releaseDate: '2026-08-21',
         productType: 'game',
+        platform: 'switch',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000001',
         sourcePayload: expect.objectContaining({ fixtureMarker: 'game-extra' })
       },
@@ -59,6 +61,7 @@ describe('Japanese catalog normalization', () => {
         imageUrl: 'https://img-eshop.cdn.nintendo.net/i/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.jpg',
         releaseDate: '2026-08-27',
         productType: 'bundle',
+        platform: 'switch',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000002',
         sourcePayload: expect.objectContaining({ fixtureMarker: 'bundle-extra' })
       },
@@ -74,6 +77,7 @@ describe('Japanese catalog normalization', () => {
         imageUrl: null,
         releaseDate: null,
         productType: 'dlc',
+        platform: 'switch',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000003',
         sourcePayload: expect.objectContaining({ fixtureMarker: 'dlc-extra' })
       },
@@ -89,6 +93,7 @@ describe('Japanese catalog normalization', () => {
         imageUrl: null,
         releaseDate: null,
         productType: 'unknown',
+        platform: 'switch',
         sourceUrl: 'https://store-jp.nintendo.com/item/software/D70010000000004',
         sourcePayload: expect.objectContaining({ fixtureMarker: 'unknown-extra' })
       }
@@ -265,6 +270,22 @@ describe('Japanese catalog normalization', () => {
     ['2026-08-07', { sdate: '2026-8-7' }]
   ])('normalizes a supported release date shape to %s', (expected, dateFields) => {
     expect(normalizeJapanCatalogItem(rawItem(dateFields)).releaseDate).toBe(expected);
+  });
+
+  it.each([
+    ['1_HAC', 'switch'],
+    ['05_BEE', 'switch2']
+  ])('maps hardware %s to platform %s', (hard, platform) => {
+    expect(normalizeJapanCatalogItem(rawItem({ hard })).platform).toBe(platform);
+  });
+
+  it('rejects a priceable row without a known hardware code', () => {
+    expect(JapanCatalogItemSchema.safeParse({
+      id: 'synthetic-item',
+      nsuid: '70010000009999',
+      title: 'Synthetic Test Item',
+      hard: '2_CTR'
+    }).success).toBe(false);
   });
 
   it('treats a year-only announcement as an unknown release date', () => {

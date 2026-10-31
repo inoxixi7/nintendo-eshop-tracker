@@ -1,6 +1,7 @@
 import {
   CatalogItemSchema,
   type CatalogItem,
+  type Platform,
   type ProductType
 } from '@eshop-tracker/shared';
 import type { JapanCatalogItem } from './catalog-schema.js';
@@ -22,6 +23,8 @@ const GAME_SOFTWARE_FORMS = new Set([
   'BEE_CARD',
   'BEE_GC'
 ]);
+
+const PLATFORMS = { '1_HAC': 'switch', '05_BEE': 'switch2' } as const satisfies Record<JapanCatalogItem['hard'], Platform>;
 
 function nullableText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -70,6 +73,7 @@ export function normalizeJapanCatalogItem(item: JapanCatalogItem): CatalogItem {
       : `https://img-eshop.cdn.nintendo.net/i/${imageHash}.jpg`,
     releaseDate: normalizeReleaseDate(item),
     productType: productType(item.sform),
+    platform: PLATFORMS[item.hard],
     sourceUrl: `https://store-jp.nintendo.com/item/software/D${item.nsuid}`,
     sourcePayload: item
   });

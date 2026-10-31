@@ -17,6 +17,7 @@ function rawItem(index: number, overrides: Record<string, unknown> = {}) {
     siurl: IMAGE_HASH,
     dsdate: '2026-08-11',
     sform: 'HAC_DL',
+    hard: '1_HAC',
     ...overrides
   };
 }

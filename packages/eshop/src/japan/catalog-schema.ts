@@ -23,7 +23,8 @@ export const JapanCatalogItemSchema = z.object({
   iurl: ImageHashSchema,
   dsdate: NullableTrimmedString,
   sdate: NullableTrimmedString,
-  sform: z.string().trim().nullable().optional()
+  sform: z.string().trim().nullable().optional(),
+  hard: z.enum(['1_HAC', '05_BEE'])
 }).loose();
 
 // Directory-only variants (e.g. "70010000039949_2", "4039") cannot be priced; their base titles are listed separately.

@@ -13,7 +13,7 @@ const SWITCH_2_SOURCE_ID = '70010000000200';
 const IMAGE_HASH = 'a'.repeat(64);
 const OBSERVED_AT = '2026-08-11T00:00:00.000Z';
 
-function catalogItem(sourceId: string, title: string) {
+function catalogItem(sourceId: string, title: string, hard = '1_HAC') {
   return {
     id: sourceId,
     nsuid: sourceId,
@@ -23,7 +23,8 @@ function catalogItem(sourceId: string, title: string) {
     text: `${title} description`,
     siurl: IMAGE_HASH,
     dsdate: '2026-08-11',
-    sform: 'HAC_DL'
+    sform: 'HAC_DL',
+    hard
   };
 }
 
@@ -107,7 +108,7 @@ describe('createJapanEshopAdapter', () => {
         if (url.searchParams.get('opt_hard') === '05_BEE') {
           // repeats FIRST_SOURCE_ID to prove cross-hardware rows are deduplicated
           return jsonResponse(catalogPage([
-            catalogItem(SWITCH_2_SOURCE_ID, 'Synthetic Switch 2'),
+            catalogItem(SWITCH_2_SOURCE_ID, 'Synthetic Switch 2', '05_BEE'),
             catalogItem(FIRST_SOURCE_ID, 'Synthetic First duplicate')
           ]));
         }
@@ -145,10 +146,10 @@ describe('createJapanEshopAdapter', () => {
 
     expect(validateCatalogBatch(catalog, 'JP')).toEqual(catalog);
     expect(validatePriceBatch(prices.observations, 'JP')).toEqual(prices.observations);
-    expect(catalog.map((item) => [item.sourceId, item.title])).toEqual([
-      [FIRST_SOURCE_ID, 'Synthetic First'],
-      [SECOND_SOURCE_ID, 'Synthetic Second'],
-      [SWITCH_2_SOURCE_ID, 'Synthetic Switch 2']
+    expect(catalog.map((item) => [item.sourceId, item.title, item.platform])).toEqual([
+      [FIRST_SOURCE_ID, 'Synthetic First', 'switch'],
+      [SECOND_SOURCE_ID, 'Synthetic Second', 'switch'],
+      [SWITCH_2_SOURCE_ID, 'Synthetic Switch 2', 'switch2']
     ]);
     expect(prices.observations.map((item) => item.sourceId)).toEqual([
       FIRST_SOURCE_ID,
