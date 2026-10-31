@@ -37,10 +37,14 @@ describe('fetchTitleAliases', () => {
   it('reads traditional and simplified HK titles, tolerating whitespace in codes', async () => {
     const { fetch } = fakeFetch([[]], 0, [
       { title: '薩爾達傳說 織夢島', title_sc: '', product_code: '\r\nHACPAR3NA', media: 'eshop' },
-      { title: '忍者寶盒', product_code: '' }
+      { title: '劍與魔法與學園任務', product_code: '', thumb_img: 'HAC-P-A585C.jpg' },
+      { title: '忍者寶盒', product_code: '', thumb_img: '70010000046398.jpeg' }
     ]);
 
-    expect(await fetchTitleAliases(fetch)).toEqual([{ platform: 'switch', productCore: 'AR3N', language: 'zh', title: '薩爾達傳說 織夢島' }]);
+    expect(await fetchTitleAliases(fetch)).toEqual([
+      { platform: 'switch', productCore: 'AR3N', language: 'zh', title: '薩爾達傳說 織夢島' },
+      { platform: 'switch', productCore: 'A585', language: 'zh', title: '劍與魔法與學園任務' }
+    ]);
   });
 
   it('rejects an unexpected payload shape', async () => {

@@ -25,7 +25,8 @@ const EuropePageSchema = z.object({
 const ChineseListSchema = z.array(z.object({
   title: z.string().optional(),
   title_sc: z.string().optional(),
-  product_code: z.string().optional()
+  product_code: z.string().optional(),
+  thumb_img: z.string().optional()
 }).loose());
 
 function invalidPayload(cause: unknown): EshopError {
@@ -66,7 +67,8 @@ export async function fetchChineseTitleAliases(fetch: FetchLike, signal?: AbortS
   const aliases: TitleAlias[] = [];
   for (const list of CHINESE_LISTS) {
     const items = parse(ChineseListSchema, await requestJson({ fetch, url: new URL(list), country: 'JP', signal }));
-    for (const item of items) aliases.push(...aliasesFor([item.product_code ?? ''], 'zh', [item.title, item.title_sc]));
+    // newer Chinese editions leave product_code empty but name their artwork after it, e.g. HAC-P-A585C.jpg
+    for (const item of items) aliases.push(...aliasesFor([item.product_code ?? '', (item.thumb_img ?? '').replace(/\.\w+$/, '')], 'zh', [item.title, item.title_sc]));
   }
   return aliases;
 }

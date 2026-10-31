@@ -9,7 +9,9 @@ describe('normalizeSearchText', () => {
     ['超级马力欧兄弟', '超级玛利欧兄弟'],
     ['ＰＯＫＥＭＯＮ　Ｌｅｇｅｎｄｓ', 'pokemonlegends'],
     ['The Legend of Zelda: Tears of the Kingdom', 'thelegendofzeldatearsofthekingdom'],
-    ['ﾎﾟｹﾓﾝ', 'ぽけもん']
+    ['ﾎﾟｹﾓﾝ', 'ぽけもん'],
+    ['Pokémon Café ReMix', 'pokemoncaferemix'],
+    ['ゼルダ ガイド', 'ぜるだがいど']
   ])('folds %s', (input, expected) => {
     expect(normalizeSearchText(input)).toBe(expected);
   });

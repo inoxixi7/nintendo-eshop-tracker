@@ -18,7 +18,8 @@ const MAINLAND_NAMES: ReadonlyArray<readonly [RegExp, string]> = [
  * queries into tokens first.
  */
 export function normalizeSearchText(text: string): string {
-  let folded = text.normalize('NFKC').toLowerCase();
+  // Latin accents only (Pokémon → pokemon); the kana voicing mark U+3099 is outside this range
+  let folded = text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').normalize('NFKC').toLowerCase();
   folded = folded.replace(/[ァ-ヶ]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60));
   folded = toSimplified(folded);
   for (const [pattern, replacement] of MAINLAND_NAMES) folded = folded.replace(pattern, replacement);
