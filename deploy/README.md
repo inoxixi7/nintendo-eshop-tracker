@@ -76,6 +76,8 @@ sudo tailscale serve --bg --https=8443 http://127.0.0.1:8194
 curl https://g3.tailde10b2.ts.net:8443/v1/health
 ```
 
+The same service serves the web app (`apps/web`, a PWA with deals, search, price history and on-device favorites) at `/`, so `https://g3.tailde10b2.ts.net:8443/` can be added to a phone's home screen.
+
 Prices are integer minor units with their currency; a discount is reported only while its window is open, and `stale` marks prices older than twelve hours. Public exposure needs rate limiting and CORS first.
 
 ## Backups and restore

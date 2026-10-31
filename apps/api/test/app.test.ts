@@ -224,3 +224,28 @@ describe('GET /v1/health and errors', () => {
     expect(response.json().error.code).toBe('NOT_FOUND');
   });
 });
+
+describe('web app hosting', () => {
+  it('serves the PWA shell with revalidation and keeps API 404s as JSON', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+    const root = mkdtempSync(join(tmpdir(), 'eshop-web-'));
+    mkdirSync(join(root, 'assets'));
+    writeFileSync(join(root, 'index.html'), '<!doctype html><div id="app"></div>');
+    writeFileSync(join(root, 'assets', 'app-abc123.js'), 'console.log(1)');
+    const app = buildApp(fakeDb().db, { webRoot: root });
+
+    const shell = await app.inject('/');
+    expect(shell.statusCode).toBe(200);
+    expect(shell.headers['cache-control']).toBe('no-cache');
+    expect(shell.body).toContain('id="app"');
+
+    const asset = await app.inject('/assets/app-abc123.js');
+    expect(asset.headers['cache-control']).toContain('immutable');
+
+    const missing = await app.inject('/v1/nope');
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().error.code).toBe('NOT_FOUND');
+  });
+});

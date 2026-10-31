@@ -1,4 +1,5 @@
 import type { QueryClient } from '@eshop-tracker/database';
+import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { getHealth, getListing, getPriceHistory, listListings } from './queries.js';
@@ -60,8 +61,19 @@ function notFound(): never {
   throw new ApiError(404, 'NOT_FOUND', 'listing not found');
 }
 
-export function buildApp(db: QueryClient, options: { logger?: boolean } = {}): FastifyInstance {
+export function buildApp(db: QueryClient, options: { logger?: boolean; webRoot?: string } = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
+
+  if (options.webRoot !== undefined) {
+    app.register(fastifyStatic, {
+      root: options.webRoot,
+      wildcard: false,
+      setHeaders: (response, path) => {
+        // hashed assets never change; the shell and service worker must revalidate so updates land
+        response.header('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
+      }
+    });
+  }
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ApiError) return sendError(request, reply, error.statusCode, error.code, error.message);
