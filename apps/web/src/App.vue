@@ -23,7 +23,8 @@ onMounted(async () => {
       <component :is="Component" />
     </KeepAlive>
   </RouterView>
-  <nav class="tabs" aria-label="主导航">
+  <!-- the detail page has its own purchase bar in this spot -->
+  <nav v-if="!$route.path.startsWith('/listing/')" class="tabs" aria-label="主导航">
     <RouterLink to="/" class="tab" exact-active-class="on">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>
       <span>折扣</span>

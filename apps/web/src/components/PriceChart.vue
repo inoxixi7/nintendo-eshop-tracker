@@ -45,7 +45,6 @@ const chart = computed(() => {
       <text :x="PAD.left" :y="H - 6" class="axis">{{ chart.startLabel }}</text>
       <text :x="W - PAD.right" :y="H - 6" class="axis" text-anchor="end">现在</text>
     </svg>
-    <figcaption>最低 {{ formatYen(chart.min) }} · 最高 {{ formatYen(chart.max) }}</figcaption>
   </figure>
 </template>
 
@@ -55,5 +54,4 @@ svg { width: 100%; height: auto; display: block; }
 .line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
 .floor { stroke: var(--good); stroke-width: 1; stroke-dasharray: 4 4; }
 .axis { font-size: 11px; fill: var(--muted); }
-figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
 </style>
