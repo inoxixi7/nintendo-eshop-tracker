@@ -1,8 +1,10 @@
+import { CurrencyCodeSchema } from '@eshop-tracker/shared';
 import { z } from 'zod';
 
+// The client checks that the currency matches the requested country.
 const MoneySchema = z.object({
   amount: z.string(),
-  currency: z.literal('JPY'),
+  currency: CurrencyCodeSchema,
   raw_value: z.string().min(1)
 }).loose();
 
@@ -26,7 +28,7 @@ const AvailablePriceSchema = z.object({
   discount_price: DiscountMoneySchema.optional()
 }).loose();
 
-// Unreleased or terminated titles may carry no price; delisted (not_found) titles may keep their last JPY price. All are unpriced.
+// Unreleased or terminated titles may carry no price; delisted (not_found) titles may keep their last price. All are unpriced.
 const UnavailablePriceSchema = z.union([
   z.object({
     title_id: TitleIdSchema,
@@ -43,7 +45,7 @@ const UnavailablePriceSchema = z.union([
 ]);
 
 export const NintendoPriceResponseSchema = z.object({
-  country: z.literal('JP'),
+  country: z.string(),
   prices: z.array(z.union([UnavailablePriceSchema, AvailablePriceSchema]))
 }).loose();
 

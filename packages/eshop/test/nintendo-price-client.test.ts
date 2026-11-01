@@ -416,3 +416,27 @@ describe('NintendoPriceClient transport error preservation', () => {
     await expect(request).rejects.toBe(cause);
   });
 });
+
+describe('NintendoPriceClient for the US store', () => {
+  it('asks for US prices in English and keeps cents as minor units', async () => {
+    const id = sourceId(1);
+    const fetch = vi.fn<FetchLike>(async () => jsonResponse({
+      country: 'US',
+      prices: [availablePrice(id, { regular_price: { amount: '$59.99', currency: 'USD', raw_value: '59.99' } })]
+    }));
+    const client = new NintendoPriceClient({ fetch, now: () => new Date(OBSERVED_AT), country: 'US' });
+
+    const result = await client.fetchPrices([id]);
+
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(`https://api.ec.nintendo.com/v1/price?country=US&lang=en&ids=${id}`);
+    expect(result.observations).toEqual([expect.objectContaining({ country: 'US', currency: 'USD', regularAmountMinor: 5999 })]);
+  });
+
+  it('rejects a price in another currency than the store', async () => {
+    const id = sourceId(1);
+    const fetch = vi.fn<FetchLike>(async () => jsonResponse({ country: 'US', prices: [availablePrice(id)] }));
+    const client = new NintendoPriceClient({ fetch, now: () => new Date(OBSERVED_AT), country: 'US' });
+
+    await expect(client.fetchPrices([id])).rejects.toMatchObject({ code: 'INVALID_PAYLOAD', country: 'US' });
+  });
+});

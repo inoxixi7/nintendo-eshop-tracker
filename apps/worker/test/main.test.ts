@@ -40,7 +40,7 @@ function dependencies(overrides: Partial<WorkerMainDependencies> = {}) {
   const adapter = { country: 'JP' } as EshopAdapter;
   const result: WorkerMainDependencies = {
     env: { DATABASE_URL: 'postgresql://tracker:secret@database/eshop' },
-    createRepository: vi.fn(() => repository), createAdapter: vi.fn(() => adapter),
+    createRepository: vi.fn(() => repository), createRegions: vi.fn(() => [{ adapter, listingSource: 'nintendo-jp-search', priceSource: 'nintendo-price-api' }]),
     runCatalogSync: vi.fn(async () => undefined), runPriceSync: vi.fn(async () => undefined),
     createScheduler: vi.fn(() => ({
       start: vi.fn(async () => undefined),
@@ -87,7 +87,7 @@ describe('worker CLI', () => {
 
     await runWorkerCommand(['migrate'], fixture.result);
 
-    expect(fixture.result.createAdapter).not.toHaveBeenCalled();
+    expect(fixture.result.createRegions).not.toHaveBeenCalled();
     expect(fixture.repository.close).toHaveBeenCalledOnce();
     expect(marker.clear).not.toHaveBeenCalled();
     expect(marker.markReady).not.toHaveBeenCalled();
@@ -186,7 +186,7 @@ describe('worker CLI', () => {
     signals.emit('SIGTERM');
     signals.emit('SIGINT');
     await vi.waitFor(() => expect(fixture.repository.close).toHaveBeenCalledOnce());
-    expect(fixture.result.createAdapter).not.toHaveBeenCalled();
+    expect(fixture.result.createRegions).not.toHaveBeenCalled();
     expect(fixture.result.createScheduler).not.toHaveBeenCalled();
     expect(settled).toBe(false);
 
@@ -238,7 +238,7 @@ describe('worker CLI', () => {
     const fixture = dependencies();
     await expect(runWorkerCommand(['unexpected'], fixture.result)).rejects.toThrow('Invalid worker command');
     expect(fixture.result.createRepository).not.toHaveBeenCalled();
-    expect(fixture.result.createAdapter).not.toHaveBeenCalled();
+    expect(fixture.result.createRegions).not.toHaveBeenCalled();
   });
 
   it('writes only a fixed safe failure line at the top level', async () => {
@@ -277,12 +277,12 @@ describe('worker CLI', () => {
 
     expect(fixture.result.writeError).toHaveBeenCalledWith('Worker failed.\n');
     expect(fixture.result.setExitCode).toHaveBeenCalledWith(1);
-    expect(fixture.result.createAdapter).not.toHaveBeenCalled();
+    expect(fixture.result.createRegions).not.toHaveBeenCalled();
   });
 
   it('closes a constructed repository if adapter construction fails without masking the primary error', async () => {
     const primary = new Error('adapter construction failed');
-    const fixture = dependencies({ createAdapter: vi.fn(() => { throw primary; }) });
+    const fixture = dependencies({ createRegions: vi.fn(() => { throw primary; }) });
     fixture.repository.close = vi.fn(async () => { throw new Error('close failed'); });
 
     await expect(runWorkerCommand(['catalog'], fixture.result)).rejects.toBe(primary);

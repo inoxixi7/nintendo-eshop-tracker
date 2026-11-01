@@ -1,4 +1,5 @@
 import { t, type Genre } from './i18n';
+import { region, type Region } from './region';
 
 export type Platform = 'switch' | 'switch2';
 export type ProductType = 'game' | 'bundle' | 'dlc' | 'unknown';
@@ -33,6 +34,7 @@ export interface ListingDetail extends Listing {
   productCode: string | null;
   description: string | null;
   genres: string[];
+  images: string[];
   lastSeenAt: string;
 }
 
@@ -57,7 +59,7 @@ export interface PriceHistory {
 }
 
 export interface Health {
-  lastSuccessfulSync: { JP: { catalog: string | null; prices: string | null } };
+  lastSuccessfulSync: Record<Region, { catalog: string | null; prices: string | null; stale: boolean }>;
   stale: boolean;
 }
 
@@ -89,9 +91,9 @@ async function get<T>(path: string, query: Query = {}): Promise<T> {
 
 export const api = {
   deals: (query: { platform?: Platform; type?: ProductType; genre?: Genre; minDiscountPercent?: number; sort?: 'discount' | 'endingSoon'; page?: number }) =>
-    get<Page<Listing>>('/deals', { pageSize: 30, ...query }),
+    get<Page<Listing>>('/deals', { country: region.value, pageSize: 30, ...query }),
   listings: (query: { q?: string; platform?: Platform; type?: ProductType; genre?: Genre; onSale?: boolean; sort?: 'releaseDate' | 'title' | 'discount'; page?: number }) =>
-    get<Page<Listing>>('/listings', { pageSize: 30, ...query }),
+    get<Page<Listing>>('/listings', { country: region.value, pageSize: 30, ...query }),
   listing: (id: string) => get<ListingDetail>(`/listings/${encodeURIComponent(id)}`),
   history: (id: string) => get<PriceHistory>(`/listings/${encodeURIComponent(id)}/price-history`),
   health: () => get<Health>('/health')

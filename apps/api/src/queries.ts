@@ -2,6 +2,10 @@ import type { QueryClient } from '@eshop-tracker/database';
 import { searchTokens } from '@eshop-tracker/shared';
 
 export type Platform = 'switch' | 'switch2';
+
+/** Stores the worker syncs. */
+export const COUNTRIES = ['JP', 'US'] as const;
+export type Country = (typeof COUNTRIES)[number];
 export type ProductType = 'game' | 'bundle' | 'dlc' | 'unknown';
 
 /** Nintendo Japan's own genre names, as its catalog sends them. */
@@ -13,6 +17,7 @@ export const GENRES = [
 export type Genre = (typeof GENRES)[number];
 
 export interface ListingFilters {
+  readonly country: Country;
   readonly q?: string | undefined;
   readonly platform?: Platform | undefined;
   readonly type?: ProductType | undefined;
@@ -54,6 +59,8 @@ export interface ListingDetailDto extends ListingDto {
   readonly productCode: string | null;
   readonly description: string | null;
   readonly genres: string[];
+  /** Wide key art first, then screenshots. */
+  readonly images: string[];
   readonly lastSeenAt: string;
 }
 
@@ -141,21 +148,33 @@ export async function listListings(
   now = new Date()
 ): Promise<{ items: ListingDto[]; total: number }> {
   const values: unknown[] = [];
-  const where = ["l.country = 'JP'", 'l.is_active = TRUE'];
   const bind = (value: unknown) => `$${values.push(value)}`;
+  const where = [`l.country = ${bind(filters.country)}`, 'l.is_active = TRUE'];
 
   if (filters.q !== undefined) {
     const tokens = searchTokens(filters.q);
     if (tokens.length === 0) where.push('FALSE');
-    // Each word must hit the Japanese title or a same-game title in another language.
+    // Each word must hit the listing's own title or a same-game title in another language. JP listings join
+    // aliases by game code; US listings have none, so they join through the game's English name, found
+    // from a Chinese alias, from a JP listing's code, or among a JP listing's hand-kept names (one per line).
     for (const token of tokens) {
       const pattern = bind(`%${escapeLike(token)}%`);
-      where.push(`(l.title_norm LIKE ${pattern} OR (l.platform, left(l.product_code, 4)) IN (SELECT platform, product_core FROM title_aliases WHERE title_norm LIKE ${pattern}))`);
+      where.push(`(l.title_norm LIKE ${pattern}
+        OR (l.platform, left(l.product_code, 4)) IN (SELECT platform, product_core FROM title_aliases WHERE title_norm LIKE ${pattern})
+        OR (l.product_code IS NULL AND (l.platform, l.title_norm) IN (
+          SELECT en.platform, en.title_norm FROM title_aliases hit
+          JOIN title_aliases en ON en.platform = hit.platform AND en.product_core = hit.product_core AND en.language = 'en'
+          WHERE hit.title_norm LIKE ${pattern}
+          UNION SELECT en.platform, en.title_norm FROM regional_listings jp
+          JOIN title_aliases en ON en.platform = jp.platform AND en.product_core = left(jp.product_code, 4) AND en.language = 'en'
+          WHERE jp.country = 'JP' AND jp.title_norm LIKE ${pattern}
+          UNION SELECT jp.platform, unnest(string_to_array(jp.title_norm, E'\\n')) FROM regional_listings jp
+          WHERE jp.country = 'JP' AND jp.title_norm LIKE ${pattern})))`);
     }
   }
   if (filters.platform !== undefined) where.push(`l.platform = ${bind(filters.platform)}`);
   if (filters.type !== undefined) where.push(`l.product_type = ${bind(filters.type)}`);
-  // shortcut: genres are read from the JP catalog payload; move them to a column when another region needs them
+  // shortcut: genres are read from the catalog payload (US listings carry JP names mapped at sync); move them to a column when a region needs its own genre list
   if (filters.genre !== undefined) where.push(`l.source_payload->'genre' ? ${bind(filters.genre)}`);
   if (filters.onSale === true) where.push(`(${ACTIVE_DISCOUNT})`);
   if (filters.onSale === false) where.push(`NOT COALESCE(${ACTIVE_DISCOUNT}, FALSE)`);
@@ -178,10 +197,25 @@ export async function listListings(
   };
 }
 
+// shortcut: reads each store's own payload shape (JP iurl/sslurl hashes, US productGallery); map at sync if a third region arrives
+function imageUrl(value: unknown): string | null {
+  if (typeof value === 'object' && value !== null) {
+    // US gallery entry; videos are skipped
+    const { publicId, resourceType } = value as { publicId?: unknown; resourceType?: unknown };
+    return resourceType === 'image' && typeof publicId === 'string' && /^[\w/.-]+$/.test(publicId)
+      ? `https://assets.nintendo.com/image/upload/q_auto/f_auto/${publicId}`
+      : null;
+  }
+  if (typeof value !== 'string') return null;
+  if (/^[0-9a-f]{64}$/.test(value)) return `https://img-eshop.cdn.nintendo.net/i/${value}.jpg`;
+  return value.startsWith('https://') ? value : null;
+}
+
 export async function getListing(db: QueryClient, id: string, now = new Date()): Promise<ListingDetailDto | null> {
   const result = await db.query(
     `SELECT ${LISTING_COLUMNS}, l.product_code, l.description, l.last_seen_at,
-       CASE WHEN jsonb_typeof(l.source_payload->'genre') = 'array' THEN l.source_payload->'genre' END AS genres
+       CASE WHEN jsonb_typeof(l.source_payload->'genre') = 'array' THEN l.source_payload->'genre' END AS genres,
+       l.source_payload->'iurl' AS hero_image, COALESCE(l.source_payload->'sslurl', l.source_payload->'productGallery') AS screenshots
      FROM regional_listings l LEFT JOIN current_prices p ON p.regional_listing_id = l.id
      WHERE l.id = $1`,
     [id]
@@ -193,6 +227,7 @@ export async function getListing(db: QueryClient, id: string, now = new Date()):
     productCode: text(row.product_code),
     description: text(row.description),
     genres: Array.isArray(row.genres) ? row.genres.filter((genre): genre is string => typeof genre === 'string') : [],
+    images: [row.hero_image, ...(Array.isArray(row.screenshots) ? row.screenshots : [])].flatMap((value) => imageUrl(value) ?? []),
     lastSeenAt: iso(row.last_seen_at) ?? ''
   };
 }
@@ -231,19 +266,24 @@ export async function getPriceHistory(
 }
 
 export async function getHealth(db: QueryClient, now = new Date()) {
-  const result = await db.query<{ job_type: string; finished_at: Date | string }>(
-    `SELECT job_type, max(finished_at) AS finished_at
+  const result = await db.query<{ country: string; job_type: string; finished_at: Date | string }>(
+    `SELECT country, job_type, max(finished_at) AS finished_at
      FROM sync_runs
-     WHERE country = 'JP' AND status IN ('success', 'partial')
-     GROUP BY job_type`
+     WHERE status IN ('success', 'partial')
+     GROUP BY country, job_type`
   );
-  const lastSuccess = Object.fromEntries(result.rows.map((row) => [row.job_type, iso(row.finished_at)]));
-  const pricesAt = lastSuccess.prices ?? null;
+  const lastSuccess = (country: Country, jobType: string) =>
+    iso(result.rows.find((row) => row.country === country && row.job_type === jobType)?.finished_at);
+  const regions = Object.fromEntries(COUNTRIES.map((country) => {
+    const prices = lastSuccess(country, 'prices');
+    const stale = prices === null || now.getTime() - new Date(prices).getTime() > STALE_AFTER_MS;
+    return [country, { catalog: lastSuccess(country, 'catalog'), prices, stale }];
+  })) as Record<Country, { catalog: string | null; prices: string | null; stale: boolean }>;
 
   return {
     status: 'ok' as const,
     database: 'ok' as const,
-    lastSuccessfulSync: { JP: { catalog: lastSuccess.catalog ?? null, prices: pricesAt } },
-    stale: pricesAt === null || now.getTime() - new Date(pricesAt).getTime() > STALE_AFTER_MS
+    lastSuccessfulSync: regions,
+    stale: COUNTRIES.some((country) => regions[country].stale)
   };
 }

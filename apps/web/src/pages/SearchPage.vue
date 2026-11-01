@@ -4,6 +4,7 @@ import { api, type Platform } from '../api';
 import GenreChips from '../components/GenreChips.vue';
 import ListingFeed from '../components/ListingFeed.vue';
 import { t, type Genre } from '../i18n';
+import { region } from '../region';
 import { clearSearchHistory, forgetSearch, rememberSearch, searchHistory } from '../searchHistory';
 import { usePagedList } from '../usePagedList';
 
@@ -28,7 +29,7 @@ watch(input, (value) => {
   timer = setTimeout(() => { filters.q = value.trim().slice(0, 100); }, 300);
 });
 // an empty box shows history instead of listing the whole catalog
-watch(filters, () => { if (filters.q) void feed.reset(); }, { immediate: true });
+watch([filters, region], () => { if (filters.q) void feed.reset(); }, { immediate: true });
 
 function search(term: string) {
   clearTimeout(timer);

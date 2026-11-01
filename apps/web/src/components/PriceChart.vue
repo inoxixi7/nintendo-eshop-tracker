@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { PricePoint } from '../api';
-import { formatTokyoDate, formatYen } from '../format';
+import { formatDate, formatPrice } from '../format';
 import { t } from '../i18n';
 
-const props = defineProps<{ points: PricePoint[]; now?: Date }>();
+const props = defineProps<{ points: PricePoint[]; currency: string; now?: Date }>();
 
 const W = 320;
 const H = 140;
@@ -34,13 +34,13 @@ const chart = computed(() => {
   for (const point of series.slice(1)) d += ` H${x(point.t)} V${y(point.amount)}`;
   d += ` H${x(end)}`;
 
-  return { d, min, max, minY: y(min), startLabel: formatTokyoDate(new Date(start).toISOString()) };
+  return { d, min, max, minY: y(min), startLabel: formatDate(new Date(start).toISOString()) };
 });
 </script>
 
 <template>
   <figure v-if="chart" class="chart">
-    <svg :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="t('chart.aria', { min: formatYen(chart.min), max: formatYen(chart.max) })">
+    <svg :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="t('chart.aria', { min: formatPrice(chart.min, currency), max: formatPrice(chart.max, currency) })">
       <line :x1="PAD.left" :x2="W - PAD.right" :y1="chart.minY" :y2="chart.minY" class="floor" />
       <path :d="chart.d" class="line" />
       <text :x="PAD.left" :y="H - 6" class="axis">{{ chart.startLabel }}</text>

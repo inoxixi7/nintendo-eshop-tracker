@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Listing } from '../api';
-import { currentAmount, endsIn, formatYen, PLATFORM_LABEL, salesStatusLabel } from '../format';
+import { currentAmount, endsIn, formatPrice, PLATFORM_LABEL, salesStatusLabel } from '../format';
 import { t } from '../i18n';
 
 defineProps<{ listing: Listing }>();
@@ -24,8 +24,8 @@ defineProps<{ listing: Listing }>();
       </div>
       <div v-if="listing.price" class="price">
         <span v-if="listing.price.discountPercent !== null" class="sticker">-{{ listing.price.discountPercent }}%</span>
-        <strong class="yen" :class="{ sale: listing.price.discountPercent !== null }">{{ formatYen(currentAmount(listing.price)) }}</strong>
-        <s v-if="listing.price.discountPercent !== null">{{ formatYen(listing.price.regularAmountMinor) }}</s>
+        <strong class="yen" :class="{ sale: listing.price.discountPercent !== null }">{{ formatPrice(currentAmount(listing.price), listing.price.currency) }}</strong>
+        <s v-if="listing.price.discountPercent !== null">{{ formatPrice(listing.price.regularAmountMinor, listing.price.currency) }}</s>
       </div>
       <div v-else class="price muted">{{ t('price.none') }}</div>
     </div>

@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { api, ApiError, type ListingDetail, type PriceHistory } from '../api';
 import PriceChart from '../components/PriceChart.vue';
 import { isFavorite, toggleFavorite } from '../favorites';
-import { currentAmount, endsIn, formatTokyo, formatTokyoDate, formatYen, PLATFORM_LABEL, salesStatusLabel } from '../format';
+import { currentAmount, endsIn, formatDate, formatPrice, formatTime, PLATFORM_LABEL, salesStatusLabel } from '../format';
 import { genreLabel, t } from '../i18n';
 
 const props = defineProps<{ id: string }>();
@@ -26,8 +26,8 @@ watch(() => props.id, async (id) => {
   }
 }, { immediate: true });
 
-// the compact title bar takes over once the artwork has scrolled away
-const onScroll = () => { scrolled.value = window.scrollY > 260; };
+// the compact title bar takes over once the page title has scrolled away
+const onScroll = () => { scrolled.value = window.scrollY > (listing.value?.images.length ? 300 : 100); };
 onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }));
 onUnmounted(() => window.removeEventListener('scroll', onScroll));
 
@@ -55,6 +55,9 @@ const deal = computed(() => {
   };
 });
 
+const currency = computed(() => listing.value?.price?.currency ?? history.value?.currency ?? 'JPY');
+const money = (amountMinor: number) => formatPrice(amountMinor, currency.value);
+
 const changed = computed(() => (history.value?.points.length ?? 0) > 1);
 const highest = computed(() => Math.max(...(history.value?.points ?? []).map((point) => point.discountAmountMinor ?? point.regularAmountMinor)));
 </script>
@@ -74,32 +77,40 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
     </header>
 
     <p v-if="error" class="state error body" role="alert">{{ error }}</p>
-    <div v-else-if="!listing" class="stage" role="status" :aria-label="t('feed.loading')"><div class="cover skeleton" /></div>
+    <div v-else-if="!listing" class="gallery" role="status" :aria-label="t('feed.loading')"><div class="shot skeleton" /></div>
     <article v-else>
-      <div class="stage">
-        <div v-if="listing.imageUrl" class="backdrop" :style="{ backgroundImage: `url(${listing.imageUrl})` }" />
-        <img v-if="listing.imageUrl" :src="listing.imageUrl" alt="" class="cover" />
-        <div v-else class="cover blank" />
+      <!-- key art then screenshots; a tap opens the full-size image -->
+      <div v-if="listing.images.length > 0" class="gallery" role="group" :aria-label="t('detail.gallery')">
+        <a v-for="(src, index) in listing.images" :key="src" :href="src" target="_blank" rel="noopener" class="shot"
+          :aria-label="t('detail.image', { n: index + 1, total: listing.images.length })">
+          <img :src="src" alt="" :loading="index < 2 ? 'eager' : 'lazy'" decoding="async" />
+        </a>
       </div>
 
-      <div class="body">
-        <div class="tags">
-          <span class="badge" :class="listing.platform">{{ PLATFORM_LABEL[listing.platform] }}</span>
-          <span v-if="listing.productType !== 'game'" class="badge">{{ t(`type.${listing.productType}`) }}</span>
-          <span v-if="!listing.isActive" class="badge">{{ t('detail.removed') }}</span>
+      <div class="body" :class="{ bare: listing.images.length === 0 }">
+        <div class="head">
+          <img v-if="listing.imageUrl" :src="listing.imageUrl" alt="" class="cover" />
+          <div v-else class="cover blank" />
+          <div class="head-text">
+            <h1 class="title">{{ listing.title }}</h1>
+            <p v-if="listing.publisher" class="publisher">{{ listing.publisher }}</p>
+            <div class="tags">
+              <span class="badge" :class="listing.platform">{{ PLATFORM_LABEL[listing.platform] }}</span>
+              <span v-if="listing.productType !== 'game'" class="badge">{{ t(`type.${listing.productType}`) }}</span>
+              <span v-if="!listing.isActive" class="badge">{{ t('detail.removed') }}</span>
+            </div>
+          </div>
         </div>
-        <h1 class="title">{{ listing.title }}</h1>
-        <p v-if="listing.publisher" class="publisher">{{ listing.publisher }}</p>
 
         <section v-if="listing.price && deal" class="card price" :aria-label="t('detail.price')">
           <p v-if="listing.price.stale" class="stale">{{ t('stale.price') }}</p>
           <div class="price-row">
             <div>
               <p class="label">{{ t(deal.onSale ? 'price.sale' : 'price.current') }}</p>
-              <strong class="big yen" :class="{ sale: deal.onSale }">{{ formatYen(deal.now) }}</strong>
+              <strong class="big yen" :class="{ sale: deal.onSale }">{{ money(deal.now) }}</strong>
               <p v-if="deal.onSale" class="was">
-                <s>{{ formatYen(listing.price.regularAmountMinor) }}</s>
-                <span class="save">{{ t('price.save', { amount: formatYen(deal.saved) }) }}</span>
+                <s>{{ money(listing.price.regularAmountMinor) }}</s>
+                <span class="save">{{ t('price.save', { amount: money(deal.saved) }) }}</span>
               </p>
             </div>
             <span v-if="deal.onSale" class="sticker big-sticker">-{{ listing.price.discountPercent }}%</span>
@@ -108,7 +119,7 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
           <div v-if="deal.endsIn" class="countdown" :class="{ urgent: deal.urgent }">
             <div class="countdown-text">
               <span>{{ deal.endsIn }}</span>
-              <span class="muted">{{ t('price.ends', { time: formatTokyo(listing.price.discountEndAt!) }) }}</span>
+              <span class="muted">{{ t('price.ends', { time: formatTime(listing.price.discountEndAt!) }) }}</span>
             </div>
             <div v-if="deal.elapsed !== null" class="track" aria-hidden="true">
               <div class="fill" :style="{ width: `${(1 - deal.elapsed) * 100}%` }" />
@@ -121,7 +132,7 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
           </p>
           <p v-else-if="deal.aboveLowest !== null" class="verdict">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v5M12 16v.01" /></svg>
-            {{ t('price.aboveLowest', { low: formatYen(deal.lowest!), diff: formatYen(deal.aboveLowest) }) }}
+            {{ t('price.aboveLowest', { low: money(deal.lowest!), diff: money(deal.aboveLowest) }) }}
           </p>
         </section>
         <section v-else class="card empty-price">
@@ -133,15 +144,15 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
           <h2 id="trend">{{ t('detail.trend') }}</h2>
           <template v-if="changed">
             <div class="stats">
-              <div><span class="muted small">{{ t('detail.lowest') }}</span><strong class="yen good-ink">{{ formatYen(history.lowestAmountMinor!) }}</strong></div>
-              <div><span class="muted small">{{ t('detail.highest') }}</span><strong class="yen">{{ formatYen(highest) }}</strong></div>
+              <div><span class="muted small">{{ t('detail.lowest') }}</span><strong class="yen good-ink">{{ money(history.lowestAmountMinor!) }}</strong></div>
+              <div><span class="muted small">{{ t('detail.highest') }}</span><strong class="yen">{{ money(highest) }}</strong></div>
               <div><span class="muted small">{{ t('detail.changes') }}</span><strong>{{ t('detail.changeCount', { n: history.points.length - 1 }) }}</strong></div>
             </div>
-            <PriceChart :points="history.points" />
+            <PriceChart :points="history.points" :currency="currency" />
           </template>
           <p v-else class="flat">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16" /></svg>
-            <span>{{ t('detail.flat', { date: formatTokyoDate(history.points[0]!.observedAt) }) }}</span>
+            <span>{{ t('detail.flat', { date: formatDate(history.points[0]!.observedAt) }) }}</span>
           </p>
         </section>
 
@@ -155,7 +166,7 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
             <div><dt>{{ t('detail.platform') }}</dt><dd>{{ PLATFORM_LABEL[listing.platform] }}</dd></div>
             <div><dt>{{ t('detail.type') }}</dt><dd>{{ t(`type.${listing.productType}`) }}</dd></div>
             <div v-if="listing.publisher"><dt>{{ t('detail.publisher') }}</dt><dd>{{ listing.publisher }}</dd></div>
-            <div v-if="listing.releaseDate"><dt>{{ t('detail.release') }}</dt><dd>{{ formatTokyoDate(listing.releaseDate) }}</dd></div>
+            <div v-if="listing.releaseDate"><dt>{{ t('detail.release') }}</dt><dd>{{ formatDate(listing.releaseDate) }}</dd></div>
             <div v-if="listing.price"><dt>{{ t('detail.status') }}</dt><dd>{{ salesStatusLabel(listing.price.salesStatus) }}</dd></div>
           </dl>
         </section>
@@ -171,7 +182,7 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
 
       <div v-if="listing.sourceUrl" class="buy">
         <div class="buy-price">
-          <strong class="yen" :class="{ sale: deal?.onSale }">{{ deal ? formatYen(deal.now) : t('price.none') }}</strong>
+          <strong class="yen" :class="{ sale: deal?.onSale }">{{ deal ? money(deal.now) : t('price.none') }}</strong>
           <span v-if="deal?.onSale" class="muted small">-{{ listing.price!.discountPercent }}%</span>
         </div>
         <a :href="listing.sourceUrl" target="_blank" rel="noopener" class="buy-button">
@@ -247,52 +258,65 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
 .round.on { color: var(--accent); }
 .round.on svg { fill: currentColor; }
 
-/* artwork stage: the cover floats on a blurred wash of itself */
-.stage {
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  padding: calc(64px + env(safe-area-inset-top)) 0 28px;
+/* screenshot strip under the bar; the next shot peeks in so it reads as swipeable */
+.gallery {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 16px;
+  padding: calc(60px + env(safe-area-inset-top)) 16px 4px;
+  scrollbar-width: none;
 }
 
-.backdrop {
-  position: absolute;
-  /* no bottom overhang, so the fade reaches transparent before the stage clips it */
-  inset: -40px -40px 0;
-  background-size: cover;
-  background-position: center;
-  filter: blur(36px) saturate(1.5);
-  opacity: 0.55;
-  mask-image: linear-gradient(to bottom, #000 40%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent);
+.gallery::-webkit-scrollbar { display: none; }
+
+.shot {
+  flex: none;
+  width: 86%;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  overflow: hidden;
+  scroll-snap-align: start;
+  background: var(--surface-2);
+  box-shadow: 0 0 0 1px var(--line);
 }
+
+.shot:only-child { width: 100%; }
+.shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.body { padding: 14px 16px 0; }
+.body.bare { padding-top: calc(64px + env(safe-area-inset-top)); }
+
+.head { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
 
 .cover {
-  position: relative;
-  width: min(68vw, 300px);
-  aspect-ratio: 1;
+  width: 84px;
+  height: 84px;
+  flex: none;
   object-fit: cover;
-  border-radius: 22px;
+  border-radius: 18px;
   background: var(--surface-2);
-  box-shadow: 0 18px 40px rgb(0 0 0 / 0.28), 0 0 0 1px rgb(255 255 255 / 0.08);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.16), 0 0 0 1px var(--line);
 }
 
-.body { padding: 0 16px; }
-
-.tags { display: flex; justify-content: center; gap: 6px; }
+.head-text { min-width: 0; }
 
 .title {
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.35;
-  text-align: center;
-  margin: 10px 0 2px;
-  text-wrap: balance;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.publisher { text-align: center; color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+.publisher { color: var(--muted); font-size: 13px; margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 
 .card {
   background: var(--surface);
@@ -308,40 +332,36 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 
-.price-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.big { display: block; font-size: 40px; line-height: 1.1; margin-top: 2px; letter-spacing: -0.02em; }
+/* price card stays short on a phone: price, countdown and verdict are one line each */
+.price { padding: 14px 16px; }
+.price-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.price .label { font-size: 12px; }
+.big { display: block; font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; }
 .big.sale, .buy-price .sale { color: var(--sale); }
-.was { margin: 4px 0 0; font-size: 14px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+.was { margin: 2px 0 0; font-size: 13px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
 .save { color: var(--good); font-weight: 700; }
-.big-sticker { font-size: 20px; padding: 6px 12px; margin-top: 8px; }
+.big-sticker { font-size: 17px; padding: 5px 10px; }
 
-.countdown {
-  margin-top: 14px;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-
-.countdown-text { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 700; }
-.countdown-text .muted { font-weight: 500; font-size: 13px; }
-.countdown.urgent { background: var(--accent-soft); }
+.countdown { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.countdown-text { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; }
+.countdown-text .muted { font-weight: 500; font-size: 12px; }
 .countdown.urgent .countdown-text > span:first-child { color: var(--sale); }
 
-.track { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 22%, transparent); margin-top: 10px; overflow: hidden; }
+.track { height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 22%, transparent); margin-top: 6px; overflow: hidden; }
 .fill { height: 100%; border-radius: inherit; background: var(--text); }
 .countdown.urgent .fill { background: var(--sale); }
 
 .verdict {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 12px 0 0;
-  font-size: 14px;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
 }
 
-.verdict svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.verdict svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .verdict.good { color: var(--good); }
 
 .empty-price { text-align: center; padding: 22px 16px; }
@@ -407,6 +427,9 @@ const highest = computed(() => Math.max(...(history.value?.points ?? []).map((po
 .buy-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
 @media (min-width: 720px) {
-  .stage { padding-top: 84px; }
+  .shot { width: 72%; }
+  .cover { width: 104px; height: 104px; }
+  .title { font-size: 22px; }
+  .big { font-size: 36px; }
 }
 </style>

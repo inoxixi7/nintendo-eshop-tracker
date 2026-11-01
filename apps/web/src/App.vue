@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { api, type Health } from './api';
-import { formatTokyo } from './format';
+import { formatTime } from './format';
 import { t } from './i18n';
+import { region } from './region';
 
 const health = ref<Health | null>(null);
 
@@ -12,9 +13,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="health?.stale" class="page" style="padding-bottom: 0; min-height: 0">
+  <div v-if="health?.lastSuccessfulSync[region].stale" class="page" style="padding-bottom: 0; min-height: 0">
     <p class="stale" role="status">
-      {{ t('stale.banner', { time: health.lastSuccessfulSync.JP.prices ? formatTokyo(health.lastSuccessfulSync.JP.prices) : t('stale.never') }) }}
+      {{ t('stale.banner', { time: health.lastSuccessfulSync[region].prices ? formatTime(health.lastSuccessfulSync[region].prices!) : t('stale.never') }) }}
     </p>
   </div>
   <RouterView v-slot="{ Component }">

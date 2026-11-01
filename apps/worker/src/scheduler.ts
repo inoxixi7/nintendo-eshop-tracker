@@ -1,8 +1,7 @@
 import { Cron } from 'croner';
-import type { EshopAdapter } from '@eshop-tracker/eshop';
 import type { TrackerRepository } from '@eshop-tracker/database';
 import type { WorkerConfig } from './config.js';
-import { runCatalogSync, runPriceSync, type SyncOptions } from './sync.js';
+import { runCatalogSync, runPriceSync, type RegionSync, type SyncOptions } from './sync.js';
 
 export type WorkerSignal = 'SIGINT' | 'SIGTERM';
 export type CronCallback = () => void;
@@ -26,9 +25,7 @@ type JobName = 'catalog' | 'prices';
 export interface WorkerSchedulerOptions {
   readonly config: Pick<WorkerConfig, 'catalogCron' | 'priceCron' | 'timeZone' | 'runOnStartup'>;
   readonly repository: TrackerRepository;
-  readonly adapter: EshopAdapter;
-  readonly listingSource: string;
-  readonly priceSource: string;
+  readonly regions: readonly RegionSync[];
   readonly now: () => Date;
   readonly cronFactory?: CronFactory;
   readonly signals?: SignalRegistrar;
@@ -167,14 +164,12 @@ class DurableWorkerScheduler implements WorkerScheduler {
     if (!this.accepting || this.running.has(job)) return Promise.resolve();
     this.running.add(job);
     const sync = job === 'catalog' ? this.options.runCatalogSync : this.options.runPriceSync;
-    const promise = Promise.resolve().then(() => sync({
-      adapter: this.options.adapter,
+    const promise = runEachRegion(this.options.regions, (region) => sync({
+      ...region,
       repository: this.options.repository,
-      listingSource: this.options.listingSource,
-      priceSource: this.options.priceSource,
       now: this.options.now,
       signal: this.controller.signal
-    })).then(noop);
+    }));
     this.active.add(promise);
     void promise.then(noop, noop).then(() => {
       this.running.delete(job);
@@ -207,6 +202,19 @@ class DurableWorkerScheduler implements WorkerScheduler {
       this.removeSignals();
     }
   }
+}
+
+/** Runs every region even when an earlier one fails, then rethrows the first failure. */
+export async function runEachRegion(regions: readonly RegionSync[], sync: (region: RegionSync) => Promise<unknown>): Promise<void> {
+  const failures: unknown[] = [];
+  for (const region of regions) {
+    try {
+      await sync(region);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0) throw failures[0];
 }
 
 export function createWorkerScheduler(options: WorkerSchedulerOptions): WorkerScheduler {

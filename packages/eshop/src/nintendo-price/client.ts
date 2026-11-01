@@ -1,4 +1,4 @@
-import type { PriceObservation } from '@eshop-tracker/shared';
+import type { CountryCode, CurrencyCode, PriceObservation } from '@eshop-tracker/shared';
 import { EshopError } from '../errors.js';
 import type { PriceFetchResult } from '../price-fetch-result.js';
 import {
@@ -16,16 +16,23 @@ import {
 export interface NintendoPriceClientOptions {
   fetch: FetchLike;
   now: () => Date;
+  country?: CountryCode;
 }
+
+const STORES = {
+  JP: { lang: 'ja', currency: 'JPY' },
+  US: { lang: 'en', currency: 'USD' },
+  GB: { lang: 'en', currency: 'GBP' }
+} satisfies Record<CountryCode, { lang: string; currency: CurrencyCode }>;
 
 const PRICE_URL = 'https://api.ec.nintendo.com/v1/price';
 const MAX_BATCH_SIZE = 50;
 
-function invalidPayload(cause: unknown): EshopError {
+function invalidPayload(cause: unknown, country: CountryCode): EshopError {
   return new EshopError({
     code: 'INVALID_PAYLOAD',
     message: 'Nintendo price payload is invalid',
-    country: 'JP',
+    country,
     cause
   });
 }
@@ -64,13 +71,15 @@ export class NintendoPriceClient {
     sourceIds: readonly string[],
     signal?: AbortSignal
   ): Promise<PriceFetchResult> {
+    const country = this.options.country ?? 'JP';
+    const store = STORES[country];
     const uniqueSourceIds: string[] = [];
     const seenInput = new Set<string>();
 
     for (const sourceId of sourceIds) {
       const parsedSourceId = NintendoSourceIdSchema.safeParse(sourceId);
       if (!parsedSourceId.success) {
-        throw invalidPayload(new Error(NINTENDO_SOURCE_ID_VALIDATION_MESSAGE));
+        throw invalidPayload(new Error(NINTENDO_SOURCE_ID_VALIDATION_MESSAGE), country);
       }
 
       if (!seenInput.has(sourceId)) {
@@ -91,21 +100,21 @@ export class NintendoPriceClient {
     for (let offset = 0; offset < uniqueSourceIds.length; offset += MAX_BATCH_SIZE) {
       const batch = uniqueSourceIds.slice(offset, offset + MAX_BATCH_SIZE);
       const url = new URL(PRICE_URL);
-      url.searchParams.set('country', 'JP');
-      url.searchParams.set('lang', 'ja');
+      url.searchParams.set('country', country);
+      url.searchParams.set('lang', store.lang);
       url.searchParams.set('ids', batch.join(','));
 
       const raw = await requestJson({
         fetch: this.options.fetch,
         url,
-        country: 'JP',
+        country,
         ...(signal === undefined ? {} : { signal })
       });
 
       try {
         const response = NintendoPriceResponseSchema.parse(raw);
         reconcileResponse(response, batch);
-        const normalized = normalizeNintendoPriceResponse(response, observedAt);
+        const normalized = normalizeNintendoPriceResponse(response, observedAt, country, store.currency);
 
         for (const observation of normalized.observations) {
           if (classifiedSourceIds.has(observation.sourceId)) {
@@ -123,7 +132,7 @@ export class NintendoPriceClient {
           unavailableSourceIds.add(sourceId);
         }
       } catch (cause) {
-        throw invalidPayload(cause);
+        throw invalidPayload(cause, country);
       }
     }
 
@@ -137,11 +146,11 @@ export class NintendoPriceClient {
 
     try {
       return {
-        observations: validatePriceBatch(observations, 'JP'),
+        observations: validatePriceBatch(observations, country),
         unavailableSourceIds: orderedUnavailableSourceIds
       };
     } catch (cause) {
-      throw invalidPayload(cause);
+      throw invalidPayload(cause, country);
     }
   }
 }

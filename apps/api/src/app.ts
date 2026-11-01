@@ -3,7 +3,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { GENRES, getHealth, getListing, getPriceHistory, listListings } from './queries.js';
+import { COUNTRIES, GENRES, getHealth, getListing, getPriceHistory, listListings } from './queries.js';
 
 const MAX_PAGE_SIZE = 100;
 // per client IP; generous for a person scrolling and typing, slows a flood before it reaches PostgreSQL
@@ -12,11 +12,13 @@ export const RATE_LIMIT_PER_MINUTE = 120;
 const Platform = z.enum(['switch', 'switch2']);
 const ProductType = z.enum(['game', 'bundle', 'dlc', 'unknown']);
 const Genre = z.enum(GENRES);
+const Country = z.enum(COUNTRIES).default('JP');
 const BooleanFlag = z.enum(['true', 'false']).transform((value) => value === 'true');
 const Page = z.coerce.number().int().min(1).max(10_000).default(1);
 const PageSize = z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(20);
 
 const ListingsQuery = z.object({
+  country: Country,
   q: z.string().trim().min(1).max(100).optional(),
   platform: Platform.optional(),
   type: ProductType.optional(),
@@ -28,6 +30,7 @@ const ListingsQuery = z.object({
 }).strict();
 
 const DealsQuery = z.object({
+  country: Country,
   platform: Platform.optional(),
   type: ProductType.optional(),
   genre: Genre.optional(),

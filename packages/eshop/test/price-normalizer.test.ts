@@ -174,7 +174,6 @@ describe('Nintendo JP price response normalization', () => {
 
 describe('Nintendo JP raw price schema', () => {
   it.each([
-    ['mismatched country', { ...response(), country: 'US' }],
     ['missing country', { prices: [] }],
     ['missing prices', { country: 'JP' }],
     ['non-array prices', { country: 'JP', prices: {} }],
@@ -186,8 +185,14 @@ describe('Nintendo JP raw price schema', () => {
   it.each([
     ['regular USD', availablePrice({ regular_price: money({ currency: 'USD' }) })],
     ['discount USD', availablePrice({ discount_price: discountMoney({ currency: 'USD' }) })]
-  ])('rejects %s currency', (_name, price) => {
-    expect(NintendoPriceResponseSchema.safeParse(response([price])).success).toBe(false);
+  ])('rejects %s currency in the JP store', (_name, price) => {
+    const raw = NintendoPriceResponseSchema.parse(response([price]));
+    expect(() => normalizeNintendoPriceResponse(raw, OBSERVED_AT)).toThrow('currency');
+  });
+
+  it('rejects a response for another country', () => {
+    const raw = NintendoPriceResponseSchema.parse({ ...response(), country: 'US' });
+    expect(() => normalizeNintendoPriceResponse(raw, OBSERVED_AT)).toThrow('another country');
   });
 
   it('requires regular_price for every status except not_found and unreleased', () => {
@@ -274,7 +279,7 @@ describe('Nintendo JP raw price schema', () => {
     ['regular_price', {
       title_id: 70010000009999,
       sales_status: 'not_found',
-      regular_price: money({ currency: 'USD' })
+      regular_price: money({ currency: 'EUR' })
     }],
     ['discount_price', {
       title_id: 70010000009999,

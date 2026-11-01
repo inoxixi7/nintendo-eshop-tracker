@@ -1,19 +1,19 @@
-import { createJapanEshopAdapter, fetchTitleAliases, loadManualTitleAliases, type EshopAdapter } from '@eshop-tracker/eshop';
+import { createJapanEshopAdapter, createUsEshopAdapter, fetchTitleAliases, loadManualTitleAliases } from '@eshop-tracker/eshop';
 import { createTrackerRepository, type TrackerRepository } from '@eshop-tracker/database';
 import { pathToFileURL } from 'node:url';
 import { parseWorkerConfig } from './config.js';
 import { createWorkerReadinessMarker, type WorkerReadinessMarker } from './readiness.js';
 import {
   createWorkerScheduler,
+  runEachRegion,
   type SignalRegistrar,
   type WorkerScheduler,
   type WorkerSchedulerOptions
 } from './scheduler.js';
-import { runCatalogSync, runPriceSync, type SyncOptions } from './sync.js';
+import { runCatalogSync, runPriceSync, type RegionSync, type SyncOptions } from './sync.js';
 
 export const WORKER_USAGE = 'Usage: node dist/main.js <migrate|catalog|prices|all|schedule>\n';
 const FAILURE_LINE = 'Worker failed.\n';
-const LISTING_SOURCE = 'nintendo-jp-search';
 const PRICE_SOURCE = 'nintendo-price-api';
 
 type WorkerCommand = 'migrate' | 'catalog' | 'prices' | 'all' | 'schedule';
@@ -22,7 +22,7 @@ type SyncFunction = (options: SyncOptions) => Promise<unknown>;
 export interface WorkerMainDependencies {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly createRepository?: (databaseUrl: string) => TrackerRepository;
-  readonly createAdapter?: () => EshopAdapter;
+  readonly createRegions?: () => readonly RegionSync[];
   readonly runCatalogSync?: SyncFunction;
   readonly runPriceSync?: SyncFunction;
   readonly createScheduler?: (options: WorkerSchedulerOptions) => WorkerScheduler;
@@ -51,7 +51,7 @@ function runtime(dependencies: WorkerMainDependencies) {
   return {
     env: dependencies.env ?? process.env,
     createRepository: dependencies.createRepository ?? createTrackerRepository,
-    createAdapter: dependencies.createAdapter ?? createJapanEshopAdapter,
+    createRegions: dependencies.createRegions ?? defaultRegions,
     runCatalogSync: dependencies.runCatalogSync ?? runCatalogSync,
     runPriceSync: dependencies.runPriceSync ?? runPriceSync,
     createScheduler: dependencies.createScheduler ?? createWorkerScheduler,
@@ -60,16 +60,22 @@ function runtime(dependencies: WorkerMainDependencies) {
   };
 }
 
-function syncOptions(adapter: EshopAdapter, repository: TrackerRepository): Omit<SyncOptions, 'signal'> {
-  return {
-    adapter,
-    repository,
-    listingSource: LISTING_SOURCE,
-    priceSource: PRICE_SOURCE,
-    now: () => new Date(),
-    fetchTitleAliases: (signal) => fetchTitleAliases(globalThis.fetch, signal),
-    loadSearchNames: loadManualTitleAliases
-  };
+function defaultRegions(): readonly RegionSync[] {
+  return [
+    {
+      adapter: createJapanEshopAdapter(),
+      listingSource: 'nintendo-jp-search',
+      priceSource: PRICE_SOURCE,
+      // aliases and hand-kept names are keyed to the JP catalog
+      fetchTitleAliases: (signal) => fetchTitleAliases(globalThis.fetch, signal),
+      loadSearchNames: loadManualTitleAliases
+    },
+    { adapter: createUsEshopAdapter(), listingSource: 'nintendo-us-algolia', priceSource: PRICE_SOURCE }
+  ];
+}
+
+function syncOptions(region: RegionSync, repository: TrackerRepository): Omit<SyncOptions, 'signal'> {
+  return { ...region, repository, now: () => new Date() };
 }
 
 const noop = (): void => undefined;
@@ -140,8 +146,7 @@ export async function runWorkerCommand(args: readonly string[], dependencies: Wo
       return;
     }
 
-    const adapter = services.createAdapter();
-    const options = syncOptions(adapter, repository);
+    const regions = services.createRegions();
     if (provisionalShutdown !== undefined) {
       await provisionalShutdown;
       return;
@@ -149,7 +154,9 @@ export async function runWorkerCommand(args: readonly string[], dependencies: Wo
     if (command === 'schedule') {
       scheduler = services.createScheduler({
         config,
-        ...options,
+        regions,
+        repository,
+        now: () => new Date(),
         signals: services.signals,
         runCatalogSync: services.runCatalogSync,
         runPriceSync: services.runPriceSync
@@ -167,8 +174,12 @@ export async function runWorkerCommand(args: readonly string[], dependencies: Wo
       await scheduler.waitForShutdown();
       return;
     }
-    if (command === 'catalog' || command === 'all') await services.runCatalogSync(options);
-    if (command === 'prices' || command === 'all') await services.runPriceSync(options);
+    if (command === 'catalog' || command === 'all') {
+      await runEachRegion(regions, (region) => services.runCatalogSync(syncOptions(region, repository)));
+    }
+    if (command === 'prices' || command === 'all') {
+      await runEachRegion(regions, (region) => services.runPriceSync(syncOptions(region, repository)));
+    }
     await closeRepository();
   } catch (error) {
     if (scheduler !== undefined) {

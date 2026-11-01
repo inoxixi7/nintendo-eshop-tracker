@@ -19,7 +19,8 @@ const MAINLAND_NAMES: ReadonlyArray<readonly [RegExp, string]> = [
  */
 export function normalizeSearchText(text: string): string {
   // Latin accents only (Pokémon → pokemon); the kana voicing mark U+3099 is outside this range
-  let folded = text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').normalize('NFKC').toLowerCase();
+  // trademark signs go before NFKC would spell ™ as "tm": the US store keeps them, Europe's English names drop them
+  let folded = text.replace(/[™®©℠]/g, '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').normalize('NFKC').toLowerCase();
   folded = folded.replace(/[ァ-ヶ]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60));
   folded = toSimplified(folded);
   for (const [pattern, replacement] of MAINLAND_NAMES) folded = folded.replace(pattern, replacement);

@@ -79,7 +79,7 @@ describe('GET /v1/listings', () => {
       total: 1
     });
     expect(calls[1]?.sql).toMatch(/l\.is_active = TRUE/);
-    expect(calls[1]?.values).toEqual(['switch2', 10, 10]);
+    expect(calls[1]?.values).toEqual(['JP', 'switch2', 10, 10]);
   });
 
   it('hides a scheduled discount and flags a stale price', async () => {
@@ -103,8 +103,10 @@ describe('GET /v1/listings', () => {
     const { db, calls } = listingsDb([]);
     await buildApp(db).inject(`/v1/listings?q=${encodeURIComponent('塞尔达  50%_off')}`);
 
-    expect(calls[0]?.values.slice(0, 2)).toEqual(['%萨尔达%', '%50off%']);
-    expect(calls[0]?.sql).toMatch(/l\.title_norm LIKE \$1 OR \(l\.platform, left\(l\.product_code, 4\)\) IN \(SELECT platform, product_core FROM title_aliases WHERE title_norm LIKE \$1\)/);
+    expect(calls[0]?.values.slice(1, 3)).toEqual(['%萨尔达%', '%50off%']);
+    expect(calls[0]?.sql).toMatch(/l\.title_norm LIKE \$2\s+OR \(l\.platform, left\(l\.product_code, 4\)\) IN \(SELECT platform, product_core FROM title_aliases WHERE title_norm LIKE \$2\)/);
+    // code-less US listings reach the alias through the same game's English name
+    expect(calls[0]?.sql).toMatch(/l\.product_code IS NULL AND \(l\.platform, l\.title_norm\) IN \(\s*SELECT en\.platform, en\.title_norm[\s\S]*en\.language = 'en'\s+WHERE hit\.title_norm LIKE \$2/);
   });
 
   it('matches nothing when the query has no searchable characters', async () => {
@@ -142,15 +144,24 @@ describe('GET /v1/deals', () => {
     expect(response.statusCode).toBe(200);
     expect(calls[1]?.sql).toMatch(/p\.discount_start_at <= now\(\)/);
     expect(calls[1]?.sql).toMatch(/ORDER BY p\.discount_end_at ASC NULLS LAST/);
-    expect(calls[1]?.values).toEqual([50, 20, 0]);
+    expect(calls[1]?.values).toEqual(['JP', 50, 20, 0]);
   });
 
   it('filters by a Nintendo genre', async () => {
     const { db, calls } = listingsDb();
     await buildApp(db).inject(`/v1/deals?genre=${encodeURIComponent('ロールプレイング')}`);
 
-    expect(calls[1]?.sql).toContain(`l.source_payload->'genre' ? $1`);
-    expect(calls[1]?.values.slice(0, 1)).toEqual(['ロールプレイング']);
+    expect(calls[1]?.sql).toContain(`l.source_payload->'genre' ? $2`);
+    expect(calls[1]?.values.slice(1, 2)).toEqual(['ロールプレイング']);
+  });
+
+  it('lists one store at a time and rejects stores it does not sync', async () => {
+    const { db, calls } = listingsDb();
+    await buildApp(db).inject('/v1/deals?country=US');
+
+    expect(calls[1]?.sql).toContain('l.country = $1');
+    expect(calls[1]?.values[0]).toBe('US');
+    expect((await buildApp(db).inject('/v1/deals?country=GB')).statusCode).toBe(400);
   });
 });
 
@@ -161,11 +172,34 @@ describe('GET /v1/listings/:id', () => {
       product_code: 'BEE-P-AAAAA',
       description: 'A surfing adventure',
       genres: ['アドベンチャー', 'アクション'],
+      hero_image: 'a'.repeat(64),
+      screenshots: ['b'.repeat(64), 'javascript:alert(1)', 'https://img-eshop.cdn.nintendo.net/x.jpg'],
       last_seen_at: RECENT
     }]);
     const body = (await buildApp(db).inject(`/v1/listings/${ID}`)).json();
 
     expect(body).toMatchObject({ id: ID, productCode: 'BEE-P-AAAAA', genres: ['アドベンチャー', 'アクション'], lastSeenAt: RECENT.toISOString() });
+    expect(body.images).toEqual([
+      `https://img-eshop.cdn.nintendo.net/i/${'a'.repeat(64)}.jpg`,
+      `https://img-eshop.cdn.nintendo.net/i/${'b'.repeat(64)}.jpg`,
+      'https://img-eshop.cdn.nintendo.net/x.jpg'
+    ]);
+  });
+
+  it('builds the gallery from a US listing, skipping videos', async () => {
+    const { db } = fakeDb(() => [{
+      ...listingRow,
+      hero_image: null,
+      screenshots: [
+        { publicId: '/store/software/switch/1/Video/v', resourceType: 'video' },
+        { publicId: 'store/software/switch/1/abc', resourceType: 'image' },
+        { publicId: 'x" onerror="1', resourceType: 'image' }
+      ],
+      last_seen_at: RECENT
+    }]);
+    const body = (await buildApp(db).inject(`/v1/listings/${ID}`)).json();
+
+    expect(body.images).toEqual(['https://assets.nintendo.com/image/upload/q_auto/f_auto/store/software/switch/1/abc']);
   });
 
   it('rejects a malformed id before querying', async () => {
@@ -211,16 +245,19 @@ describe('GET /v1/listings/:id/price-history', () => {
 describe('GET /v1/health and errors', () => {
   it('reports the last successful syncs and staleness', async () => {
     const { db } = fakeDb(() => [
-      { job_type: 'catalog', finished_at: RECENT },
-      { job_type: 'prices', finished_at: RECENT }
+      { country: 'JP', job_type: 'catalog', finished_at: RECENT },
+      { country: 'JP', job_type: 'prices', finished_at: RECENT }
     ]);
     const body = (await buildApp(db).inject('/v1/health')).json();
 
     expect(body).toEqual({
       status: 'ok',
       database: 'ok',
-      lastSuccessfulSync: { JP: { catalog: RECENT.toISOString(), prices: RECENT.toISOString() } },
-      stale: false
+      lastSuccessfulSync: {
+        JP: { catalog: RECENT.toISOString(), prices: RECENT.toISOString(), stale: false },
+        US: { catalog: null, prices: null, stale: true }
+      },
+      stale: true
     });
   });
 

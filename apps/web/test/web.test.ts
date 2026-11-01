@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { ApiError, type Listing, type Page } from '../src/api';
 import ListingFeed from '../src/components/ListingFeed.vue';
-import { endsIn, formatTokyo, formatYen } from '../src/format';
+import { endsIn, formatDate, formatPrice } from '../src/format';
 import { genreLabel, locale, t } from '../src/i18n';
 import { usePagedList } from '../src/usePagedList';
 
@@ -37,12 +37,14 @@ const page = (items: Listing[], total = items.length): Page<Listing> => ({ items
 beforeEach(() => { locale.value = 'zh'; });
 
 describe('format', () => {
-  it('shows UTC sale ends in Tokyo time', () => {
-    expect(formatTokyo('2026-10-31T14:59:59Z')).toContain('23:59');
+  it('keeps a bare release date on its calendar day in any time zone', () => {
+    expect(formatDate('2026-11-05')).toBe('2026/11/5');
   });
 
-  it('formats whole yen', () => {
-    expect(formatYen(3480)).toMatch(/3,480/);
+  it('formats yen as whole units and dollars from cents', () => {
+    expect(formatPrice(3480, 'JPY')).toMatch(/^[¥￥]3,480$/);
+    expect(formatPrice(5999, 'USD')).toBe('$59.99');
+    expect(formatPrice(0, 'USD')).toBe('免费');
   });
 
   it('describes remaining sale time', () => {
@@ -56,7 +58,7 @@ describe('format', () => {
     const now = new Date('2026-10-31T12:00:00Z');
     locale.value = 'ja';
     expect(endsIn('2026-11-04T12:00:00Z', now)).toBe('あと 4 日');
-    expect(formatYen(0)).toBe('無料');
+    expect(formatPrice(0, 'JPY')).toBe('無料');
     expect(genreLabel('ロールプレイング')).toBe('ロールプレイング');
     locale.value = 'en';
     expect(endsIn('2026-11-01T12:00:00Z', now)).toBe('1d left');

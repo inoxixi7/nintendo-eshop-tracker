@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EshopAdapter } from '@eshop-tracker/eshop';
 import type { TrackerRepository } from '@eshop-tracker/database';
-import { createWorkerScheduler, type CronCallback, type CronFactory, type SignalRegistrar } from '../src/scheduler.js';
+import { createWorkerScheduler, runEachRegion, type CronCallback, type CronFactory, type SignalRegistrar } from '../src/scheduler.js';
 
 const config = {
   databaseUrl: 'postgresql://tracker:secret@database/eshop',
@@ -71,9 +71,7 @@ function schedulerOptions(overrides: Partial<Parameters<typeof createWorkerSched
     options: {
       config,
       repository,
-      adapter: { country: 'JP' } as EshopAdapter,
-      listingSource: 'nintendo-jp-search',
-      priceSource: 'nintendo-price-api',
+      regions: [{ adapter: { country: 'JP' } as EshopAdapter, listingSource: 'nintendo-jp-search', priceSource: 'nintendo-price-api' }],
       now: () => new Date('2026-08-24T00:00:00.000Z'),
       cronFactory: cron.factory,
       signals: signals.registrar,
@@ -305,5 +303,20 @@ describe('worker scheduler', () => {
 
     await expect(createWorkerScheduler(fixture.options).start()).rejects.toBe(primary);
     expect(fixture.repository.close).toHaveBeenCalledOnce();
+  });
+});
+
+describe('runEachRegion', () => {
+  it('keeps syncing later regions after one fails, then reports the first failure', async () => {
+    const jp = { adapter: { country: 'JP' } as EshopAdapter, listingSource: 'nintendo-jp-search', priceSource: 'nintendo-price-api' };
+    const us = { adapter: { country: 'US' } as EshopAdapter, listingSource: 'nintendo-us-algolia', priceSource: 'nintendo-price-api' };
+    const failure = new Error('JP down');
+    const synced: string[] = [];
+
+    await expect(runEachRegion([jp, us], async (region) => {
+      synced.push(region.adapter.country);
+      if (region === jp) throw failure;
+    })).rejects.toBe(failure);
+    expect(synced).toEqual(['JP', 'US']);
   });
 });

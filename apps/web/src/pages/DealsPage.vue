@@ -5,6 +5,7 @@ import GenreChips from '../components/GenreChips.vue';
 import ListingFeed from '../components/ListingFeed.vue';
 import SettingsButtons from '../components/SettingsButtons.vue';
 import { t, type Genre } from '../i18n';
+import { region } from '../region';
 import { usePagedList } from '../usePagedList';
 
 const filters = reactive({
@@ -24,7 +25,7 @@ const feed = usePagedList((page) => api.deals({
   page
 }));
 
-watch(filters, () => feed.reset(), { immediate: true });
+watch([filters, region], () => feed.reset(), { immediate: true });
 
 const toggleMin = (value: number) => { filters.minDiscountPercent = filters.minDiscountPercent === value ? 0 : value; };
 </script>
@@ -34,7 +35,7 @@ const toggleMin = (value: number) => { filters.minDiscountPercent = filters.minD
     <header class="page-head with-actions">
       <div>
         <h1 class="page-title">{{ t('deals.title') }}</h1>
-        <p class="page-sub">{{ t('deals.sub') }}</p>
+        <p class="page-sub">{{ t('deals.sub', { store: t(`store.${region}`) }) }}</p>
       </div>
       <SettingsButtons />
     </header>

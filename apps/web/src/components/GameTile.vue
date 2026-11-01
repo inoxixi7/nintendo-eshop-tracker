@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { Listing } from '../api';
-import { currentAmount, endsIn, formatYen, PLATFORM_LABEL } from '../format';
+import { currentAmount, endsIn, formatPrice, PLATFORM_LABEL } from '../format';
 import { t } from '../i18n';
 
 const props = defineProps<{ listing: Listing }>();
@@ -24,8 +24,8 @@ const urgent = computed(() => {
     </div>
     <h3 class="title">{{ listing.title }}</h3>
     <div v-if="listing.price" class="price">
-      <strong class="yen" :class="{ sale: onSale }">{{ formatYen(currentAmount(listing.price)) }}</strong>
-      <s v-if="onSale">{{ formatYen(listing.price.regularAmountMinor) }}</s>
+      <strong class="yen" :class="{ sale: onSale }">{{ formatPrice(currentAmount(listing.price), listing.price.currency) }}</strong>
+      <s v-if="onSale">{{ formatPrice(listing.price.regularAmountMinor, listing.price.currency) }}</s>
     </div>
     <div v-else class="price none">{{ t('price.none') }}</div>
     <span class="platform" :class="listing.platform">{{ PLATFORM_LABEL[listing.platform] }}</span>

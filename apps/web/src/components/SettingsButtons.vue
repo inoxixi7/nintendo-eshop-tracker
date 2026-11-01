@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onUnmounted, ref } from 'vue';
 import { locale, LOCALES, t, type Locale } from '../i18n';
+import { region, REGIONS } from '../region';
 import { theme, toggleTheme } from '../theme';
 
 const open = ref(false);
@@ -19,6 +20,11 @@ async function toggleMenu() {
   menu.value?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
 }
 
+// two stores so far, so a tap flips between them
+function nextRegion() {
+  region.value = REGIONS[(REGIONS.indexOf(region.value) + 1) % REGIONS.length]!;
+}
+
 function close() {
   open.value = false;
   document.removeEventListener('pointerdown', closeOnOutside);
@@ -35,6 +41,9 @@ onUnmounted(close);
 
 <template>
   <div ref="root" class="settings" @keydown.esc="close">
+    <button class="icon region" :aria-label="t('settings.region', { region: t(`region.${region}`) })" @click="nextRegion">
+      {{ t(`region.${region}`) }}
+    </button>
     <button class="icon lang" :aria-label="t('settings.language')" :aria-expanded="open" aria-haspopup="menu" @click="toggleMenu">
       <!-- two speech bubbles, "A" and "文": "switch language" -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -76,6 +85,7 @@ onUnmounted(close);
   box-shadow: var(--shadow), 0 0 0 1px var(--line);
 }
 
+.region { width: auto; min-width: 40px; padding: 0 12px; border-radius: 20px; font-size: 14px; font-weight: 700; }
 .icon[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--accent); }
 .lang svg { width: 24px; height: 24px; stroke-width: 1.5; }
 .icon svg, .menu svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }

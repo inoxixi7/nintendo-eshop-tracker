@@ -1,4 +1,4 @@
-import type { PriceObservation } from '@eshop-tracker/shared';
+import type { CountryCode, CurrencyCode, PriceObservation } from '@eshop-tracker/shared';
 import type { PriceFetchResult } from '../price-fetch-result.js';
 import { validatePriceBatch } from '../validate-batch.js';
 import { parseMinorAmount } from './decimal.js';
@@ -15,8 +15,11 @@ function isAvailablePrice(price: NintendoPrice): price is NintendoAvailablePrice
 
 export function normalizeNintendoPriceResponse(
   response: NintendoPriceResponse,
-  observedAt: string
+  observedAt: string,
+  country: CountryCode = 'JP',
+  currency: CurrencyCode = 'JPY'
 ): PriceFetchResult {
+  if (response.country !== country) throw new Error('Nintendo price response is for another country');
   const observations: PriceObservation[] = [];
   const unavailableSourceIds: string[] = [];
 
@@ -29,15 +32,18 @@ export function normalizeNintendoPriceResponse(
     }
 
     const discount = price.discount_price;
+    if (price.regular_price.currency !== currency || (discount !== undefined && discount.currency !== currency)) {
+      throw new Error('Nintendo price currency does not match the country');
+    }
     observations.push({
-      country: 'JP',
+      country,
       source: 'nintendo-price-api',
       sourceId,
-      currency: 'JPY',
-      regularAmountMinor: parseMinorAmount(price.regular_price.raw_value, 'JPY'),
+      currency,
+      regularAmountMinor: parseMinorAmount(price.regular_price.raw_value, currency),
       discountAmountMinor: discount === undefined
         ? null
-        : parseMinorAmount(discount.raw_value, 'JPY'),
+        : parseMinorAmount(discount.raw_value, currency),
       discountStartAt: discount?.start_datetime ?? null,
       discountEndAt: discount?.end_datetime ?? null,
       salesStatus: price.sales_status,
@@ -46,7 +52,7 @@ export function normalizeNintendoPriceResponse(
   }
 
   return {
-    observations: validatePriceBatch(observations, 'JP'),
+    observations: validatePriceBatch(observations, country),
     unavailableSourceIds
   };
 }

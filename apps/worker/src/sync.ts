@@ -7,9 +7,9 @@ import { withRetry, type RetryOptions } from './retry.js';
 export interface SyncOptions {
   adapter: EshopAdapter;
   repository: TrackerRepository;
-  /** JP catalog provenance and durable regional-listing identity: `nintendo-jp-search`. */
+  /** Catalog provenance and durable regional-listing identity, e.g. `nintendo-jp-search`. */
   listingSource: string;
-  /** JP price API provenance before observations are linked to a regional listing: `nintendo-price-api`. */
+  /** Price API provenance before observations are linked to a regional listing: `nintendo-price-api`. */
   priceSource: string;
   now: () => Date;
   retry?: Omit<RetryOptions, 'signal'>;
@@ -19,6 +19,9 @@ export interface SyncOptions {
   /** Hand-kept names per exact JP title, read at the start of each catalog sync. */
   loadSearchNames?: () => Promise<ReadonlyMap<string, readonly string[]>>;
 }
+
+/** One store's adapter and provenance; the worker syncs each in turn. */
+export type RegionSync = Pick<SyncOptions, 'adapter' | 'listingSource' | 'priceSource' | 'fetchTitleAliases' | 'loadSearchNames'>;
 
 export interface SyncSummary {
   jobType: JobType;

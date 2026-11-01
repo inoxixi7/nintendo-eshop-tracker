@@ -3,6 +3,8 @@ export { EshopError } from './errors.js';
 export type { EshopErrorCode, EshopErrorOptions } from './errors.js';
 export { createJapanEshopAdapter } from './japan/adapter.js';
 export type { JapanEshopAdapterOptions } from './japan/adapter.js';
+export { createUsEshopAdapter } from './us/adapter.js';
+export type { UsEshopAdapterOptions } from './us/adapter.js';
 export type { PriceFetchResult } from './price-fetch-result.js';
 export { validateCatalogBatch, validatePriceBatch } from './validate-batch.js';
 export { fetchTitleAliases, loadManualTitleAliases } from './title-aliases.js';

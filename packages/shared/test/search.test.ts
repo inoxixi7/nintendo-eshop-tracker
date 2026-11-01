@@ -11,6 +11,7 @@ describe('normalizeSearchText', () => {
     ['The Legend of Zelda: Tears of the Kingdom', 'thelegendofzeldatearsofthekingdom'],
     ['ﾎﾟｹﾓﾝ', 'ぽけもん'],
     ['Pokémon Café ReMix', 'pokemoncaferemix'],
+    ['The Legend of Zelda™: Link’s Awakening', 'thelegendofzeldalinksawakening'],
     ['ゼルダ ガイド', 'ぜるだがいど']
   ])('folds %s', (input, expected) => {
     expect(normalizeSearchText(input)).toBe(expected);
