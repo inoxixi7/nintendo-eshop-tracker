@@ -136,6 +136,7 @@ rsync -a --delete \
   --exclude '*.log' --exclude 'logs/' --exclude '**/logs/***' \
   --exclude 'data/' --exclude '**/data/***' \
   --exclude 'backups/' --exclude '**/backups/***' \
+  --exclude '.pnpm-store/' \
   ./ bber@192.168.3.39:/srv/docker/nintendo-eshop-tracker/app/
 ```
 
