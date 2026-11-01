@@ -18,7 +18,8 @@ export interface TrackerRepository {
   releaseJobLock(jobType: JobType, country: CountryCode): Promise<void>;
   startSyncRun(jobType: JobType, country: CountryCode, startedAt: Date): Promise<number>;
   finishSyncRun(id: number, result: SyncRunResult): Promise<void>;
-  upsertCatalog(items: readonly CatalogItem[], seenAt: Date): Promise<number>;
+  /** searchNames: extra names per exact title, appended to the listing's search text. */
+  upsertCatalog(items: readonly CatalogItem[], seenAt: Date, searchNames?: ReadonlyMap<string, readonly string[]>): Promise<number>;
   activeSourceIds(country: CountryCode, source: string): Promise<string[]>;
   /** Older observations are ignored and are not included in the returned count. */
   recordPrices(observations: readonly PriceObservation[]): Promise<number>;
@@ -347,11 +348,15 @@ class PostgresTrackerRepository implements TrackerRepository {
     }
   }
 
-  upsertCatalog(items: readonly CatalogItem[], seenAt: Date): Promise<number> {
-    return this.runOperation(() => this.upsertCatalogInternal(items, seenAt));
+  upsertCatalog(items: readonly CatalogItem[], seenAt: Date, searchNames: ReadonlyMap<string, readonly string[]> = new Map()): Promise<number> {
+    return this.runOperation(() => this.upsertCatalogInternal(items, seenAt, searchNames));
   }
 
-  private async upsertCatalogInternal(items: readonly CatalogItem[], seenAt: Date): Promise<number> {
+  private async upsertCatalogInternal(
+    items: readonly CatalogItem[],
+    seenAt: Date,
+    searchNames: ReadonlyMap<string, readonly string[]>
+  ): Promise<number> {
     assertValidDate(seenAt, 'seenAt');
     const parsed = await parseCatalog(items);
     if (parsed.length === 0) {
@@ -397,7 +402,8 @@ class PostgresTrackerRepository implements TrackerRepository {
             item.country, item.source, item.sourceId, item.productCode, item.title,
             item.publisher, item.developer, item.description, item.imageUrl, item.releaseDate,
             item.productType, item.platform, item.sourceUrl, JSON.stringify(item.sourcePayload), seenAt,
-            normalize(item.title)
+            // newline-separated so a search word never matches across two names
+            [item.title, ...(searchNames.get(item.title) ?? [])].map(normalize).join('\n')
           ]
         );
         accepted += upsert.rowCount ?? 0;

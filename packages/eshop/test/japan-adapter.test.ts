@@ -243,6 +243,7 @@ it('keeps the root runtime surface minimal and stable', () => {
     'EshopError',
     'createJapanEshopAdapter',
     'fetchTitleAliases',
+    'loadManualTitleAliases',
     'validateCatalogBatch',
     'validatePriceBatch'
   ]);

@@ -66,12 +66,20 @@ describe('synchronization jobs', () => {
       status: 'success', itemsRead: 1, itemsWritten: 1
     });
 
-    expect(repository.upsertCatalog).toHaveBeenCalledWith([catalogItem], startedAt);
+    expect(repository.upsertCatalog).toHaveBeenCalledWith([catalogItem], startedAt, undefined);
     expect(repository.finishSyncRun).toHaveBeenCalledWith(17, {
       status: 'success', itemsRead: 1, itemsWritten: 1
     });
     expect(vi.mocked(repository.releaseJobLock).mock.invocationCallOrder[0])
       .toBeGreaterThan(vi.mocked(repository.finishSyncRun).mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it('passes the hand-kept names to the catalog write', async () => {
+    const repository = createRepository();
+    const names = new Map([['スプラトゥーン3', ['斯普拉遁 3']]]);
+
+    await runCatalogSync({ ...options(createAdapter(), repository), loadSearchNames: async () => names });
+    expect(repository.upsertCatalog).toHaveBeenCalledWith([catalogItem], startedAt, names);
   });
 
   it('refreshes title aliases after the catalog is saved', async () => {

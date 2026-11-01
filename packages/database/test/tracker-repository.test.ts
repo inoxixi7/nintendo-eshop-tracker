@@ -300,6 +300,17 @@ describe('tracker repository', () => {
     expect(database.transactions[0]?.[1]?.values.at(-1)).toBe('ぜるだの传说');
   });
 
+  it('appends hand-kept names for that exact title to the search text', async () => {
+    const database = new FakeDatabase();
+    await createTrackerRepositoryWithDatabase(database).upsertCatalog(
+      [{ ...catalogItem, title: 'スプラトゥーン3' }],
+      new Date(),
+      new Map([['スプラトゥーン3', ['斯普拉遁 3', 'Splatoon 3']], ['マリオカート ワールド', ['Mario Kart World']]])
+    );
+
+    expect(database.transactions[0]?.[1]?.values.at(-1)).toBe('すぷらとぅーん3\n斯普拉遁3\nsplatoon3');
+  });
+
   it('replaces title aliases in one transaction, deduplicating and normalizing them', async () => {
     const database = new FakeDatabase();
     const repository = createTrackerRepositoryWithDatabase(database);

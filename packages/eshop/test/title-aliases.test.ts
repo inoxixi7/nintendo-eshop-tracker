@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EshopError } from '../src/errors.js';
-import { fetchTitleAliases } from '../src/title-aliases.js';
+import { fetchTitleAliases, loadManualTitleAliases, parseManualTitleAliases } from '../src/title-aliases.js';
 import type { FetchLike } from '../src/upstream-json.js';
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
@@ -51,5 +51,34 @@ describe('fetchTitleAliases', () => {
     const fetch: FetchLike = async () => json({ unexpected: true });
 
     await expect(fetchTitleAliases(fetch)).rejects.toBeInstanceOf(EshopError);
+  });
+});
+
+describe('manual title aliases', () => {
+  it('reads names per exact JP title, skipping comments and empty cells', () => {
+    const table = [
+      '# JP title\tChinese\tEnglish',
+      '',
+      'マリオカート ワールド\t玛利欧赛车 世界|瑪利歐賽車 世界\tMario Kart World',
+      'スプラトゥーン3\t斯普拉遁3\t',
+      'まだ名前がないゲーム\t\t'
+    ].join('\n');
+
+    expect(parseManualTitleAliases(table)).toEqual(new Map([
+      ['マリオカート ワールド', ['玛利欧赛车 世界', '瑪利歐賽車 世界', 'Mario Kart World']],
+      ['スプラトゥーン3', ['斯普拉遁3']]
+    ]));
+  });
+
+  it.each([
+    ['too many columns', 'タイトル\ta\tb\tc', /line 1/],
+    ['an empty title', '\t名前\tName', /line 1/],
+    ['a repeated title', 'タイトル\ta\nタイトル\tb', /line 2.*twice/]
+  ])('rejects %s', (_label, table, message) => {
+    expect(() => parseManualTitleAliases(table)).toThrow(message);
+  });
+
+  it('keeps the shipped table valid', async () => {
+    await expect(loadManualTitleAliases()).resolves.toBeInstanceOf(Map);
   });
 });

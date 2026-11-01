@@ -1,4 +1,4 @@
-import { createJapanEshopAdapter, fetchTitleAliases, type EshopAdapter } from '@eshop-tracker/eshop';
+import { createJapanEshopAdapter, fetchTitleAliases, loadManualTitleAliases, type EshopAdapter } from '@eshop-tracker/eshop';
 import { createTrackerRepository, type TrackerRepository } from '@eshop-tracker/database';
 import { pathToFileURL } from 'node:url';
 import { parseWorkerConfig } from './config.js';
@@ -67,7 +67,8 @@ function syncOptions(adapter: EshopAdapter, repository: TrackerRepository): Omit
     listingSource: LISTING_SOURCE,
     priceSource: PRICE_SOURCE,
     now: () => new Date(),
-    fetchTitleAliases: (signal) => fetchTitleAliases(globalThis.fetch, signal)
+    fetchTitleAliases: (signal) => fetchTitleAliases(globalThis.fetch, signal),
+    loadSearchNames: loadManualTitleAliases
   };
 }
 

@@ -50,6 +50,7 @@ COPY --chown=node:node --from=build /app/packages/database/dist packages/databas
 COPY --chown=node:node --from=build /app/packages/eshop/package.json packages/eshop/package.json
 COPY --chown=node:node --from=prod-deps /app/packages/eshop/node_modules packages/eshop/node_modules
 COPY --chown=node:node --from=build /app/packages/eshop/dist packages/eshop/dist
+COPY --chown=node:node --from=build /app/packages/eshop/title-aliases.tsv packages/eshop/title-aliases.tsv
 COPY --chown=node:node --from=build /app/packages/shared/package.json packages/shared/package.json
 COPY --chown=node:node --from=prod-deps /app/packages/shared/node_modules packages/shared/node_modules
 COPY --chown=node:node --from=build /app/packages/shared/dist packages/shared/dist

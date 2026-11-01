@@ -16,6 +16,8 @@ export interface SyncOptions {
   signal?: AbortSignal;
   /** Other-language titles for search; refreshed after each catalog sync when provided. */
   fetchTitleAliases?: (signal?: AbortSignal) => Promise<TitleAlias[]>;
+  /** Hand-kept names per exact JP title, read at the start of each catalog sync. */
+  loadSearchNames?: () => Promise<ReadonlyMap<string, readonly string[]>>;
 }
 
 export interface SyncSummary {
@@ -220,12 +222,14 @@ async function runSync(
 
 export function runCatalogSync(options: SyncOptions): Promise<SyncSummary> {
   return runSync('catalog', options, async (startedAt, progress) => {
+    // read first so a broken table fails the run before any catalog request
+    const searchNames = await options.loadSearchNames?.();
     const items = await withRetry(() => options.adapter.fetchCatalog(options.signal), retryOptions(options));
     progress.itemsRead = items.length;
     if (items.some((item) => item.country !== options.adapter.country || item.source !== options.listingSource)) {
       throw new Error('Catalog fetch result does not match the configured listing source');
     }
-    const itemsWritten = await options.repository.upsertCatalog(items, startedAt);
+    const itemsWritten = await options.repository.upsertCatalog(items, startedAt, searchNames);
     progress.itemsWritten = itemsWritten;
     if (options.fetchTitleAliases !== undefined) {
       const fetchAliases = options.fetchTitleAliases;

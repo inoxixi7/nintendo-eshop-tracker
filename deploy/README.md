@@ -84,6 +84,8 @@ Search matches Japanese, English and Chinese names: each catalog sync also refre
 sudo docker compose exec worker node apps/worker/dist/main.js catalog
 ```
 
+Nintendo's lists leave most games without a Chinese or English name, and a few Switch 2 Editions reuse another game's code, so names can also be kept by hand in `packages/eshop/title-aliases.tsv`, one row per exact Japanese title. The table is read at the start of each catalog sync and its names are added to that listing's search text. `deploy/missing-aliases.sql` lists the next 300 games still missing a name, as rows to append. After editing the table, deploy and run a catalog sync (or wait for the daily one).
+
 Prices are integer minor units with their currency; a discount is reported only while its window is open, and `stale` marks prices older than twelve hours.
 
 The live deployment is also public and read-only at `https://eshop.inoxixi.com`: a Caddy site on a separate VPS in the same tailnet proxies to the tailnet address, so G3 itself still publishes nothing to the internet:

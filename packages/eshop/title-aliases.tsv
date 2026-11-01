@@ -1,0 +1,307 @@
+# Hand-kept Chinese and English names, so a search in any language finds the same game.
+# One row per game: exact Japanese title as the JP eShop shows it<TAB>Chinese<TAB>English.
+# Several names go in one cell separated by |. Simplified or traditional Chinese both work.
+# Rows with empty cells are a to-do list and change nothing. Applied on the next catalog sync.
+# More rows: deploy/missing-aliases.sql lists the next games without a name.
+#
+# 日文标题	中文名	英文名
+メトロイド ラヴェナス		
+Pikmin 4 Nintendo Switch 2 Edition + だれでもチャレンジ! ダンドリ検定		
+ゼルダの伝説 時のオカリナ		
+かおルイージ		
+かおピーチ		
+Xenoblade3 (ゼノブレイド3) Nintendo Switch 2 Edition		
+Nintendo Switch Sports Resort		
+Xenoblade2 (ゼノブレイド2) Nintendo Switch 2 Edition		
+ファイアーエムブレム 万紫千紅 (ばんしせんこう)		Fire Emblem: Fortune's Weave
+Xenoblade Definitive Edition Nintendo Switch 2 Edition		
+スプラトゥーン レイダース		
+Star Fox (スターフォックス)		
+ヨッシーとフカシギの図鑑		
+XenobladeX Definitive Edition Nintendo Switch 2 Edition		
+リズム天国 ミラクルスターズ		
+スーパーマリオブラザーズ ワンダー Nintendo Switch 2 Edition + みんなでリンリンパーク		
+トモダチコレクション わくわく生活		
+あつまれ どうぶつの森 Nintendo Switch 2 Edition		
+バーチャルボーイ Nintendo Classics		
+マリオテニス フィーバー		
+メトロイドプライム4 ビヨンド Nintendo Switch 2 Edition		
+カービィのエアライダー		Kirby Air Riders
+かおヨッシー		
+Nintendo Switch 2 本体販売のご案内		
+Drag x Drive		Drag x Drive
+星のカービィ ディスカバリー Nintendo Switch 2 Edition + スターリーワールド		
+スーパー マリオパーティ ジャンボリー Nintendo Switch 2 Edition + ジャンボリーTV		
+スーパーマリオギャラクシー		Super Mario Galaxy
+スーパーマリオギャラクシー ＋ スーパーマリオギャラクシー ２		
+スーパーマリオギャラクシー 2		Super Mario Galaxy 2
+ドンキーコング バナンザ		
+ゼルダの伝説 ブレス オブ ザ ワイルド Nintendo Switch 2 Edition		
+ゼルダの伝説 ティアーズ オブ ザ キングダム Nintendo Switch 2 Edition		
+かおマリオ		
+メトロイドプライム4 ビヨンド		
+Pikmin 4 (ピクミン4)		
+Nintendo Switch 2 のひみつ展		
+マリオカート ワールド		
+ニンテンドー ゲームキューブ Nintendo Classics		
+XenobladeX Definitive Edition		
+星のカービィ ワールドビヨンド		
+ドンキーコング リターンズ HD		
+マリオ&ルイージRPG ブラザーシップ!		
+スーパー マリオパーティ ジャンボリー		
+Xenoblade Genesis（ゼノブレイド ジェネシス）		
+ゼルダの伝説 知恵のかりもの		The Legend of Zelda: Echoes of Wisdom
+ファミコン探偵倶楽部 笑み男		
+Nintendo World Championships ファミコン世界大会		
+ルイージマンション2 HD		
+ペーパーマリオRPG		
+FOREVER BLUE LUMINOUS (フォーエバーブルー ルミナス)		
+プリンセスピーチ Showtime!		
+マリオvs.ドンキーコング		Mario vs. Donkey Kong
+アナザーコード リコレクション:2つの記憶 / 記憶の扉		
+スーパーマリオRPG		
+F-ZERO 99		F-ZERO 99
+超おどる メイド イン ワリオ		WarioWare: Move It!
+スーパーマリオブラザーズ ワンダー		
+Pikmin 1 (ピクミン1)		
+Pikmin 2 (ピクミン2)		
+エブリバディ 1-2-Switch!（エブリバディ ワンツースイッチ!）		
+ゼルダの伝説 ティアーズ オブ ザ キングダム		
+メトロイドプライム リマスタード		Metroid Prime Remastered
+ベヨネッタ オリジンズ: セレッサと迷子の悪魔		Bayonetta Origins: Cereza and the Lost Demon
+ゲームボーイアドバンス Nintendo Classics		
+ゲームボーイ Nintendo Classics		
+星のカービィ Wii デラックス		
+Fire Emblem Engage (ファイアーエムブレム エンゲージ)		Fire Emblem Engage
+マリオ＋ラビッツ ギャラクシーバトル		
+カービィのグルメフェス	卡比的美食節	
+スプラトゥーン3	斯普拉遁 3|喷射战士 3	Splatoon 3
+Xenoblade3 (ゼノブレイド3)		Xenoblade Chronicles 3
+マリオストライカーズ バトルリーグ		Mario Strikers: Battle League Football
+Nintendo Switch Sports		Nintendo Switch Sports
+星のカービィ ディスカバリー		Kirby and the Forgotten Land
+NINTENDO 64 Nintendo Classics		Nintendo 64 – Nintendo Classics
+セガ メガドライブ for Nintendo Switch Online		SEGA Mega Drive – Nintendo Switch Online
+マリオパーティ スーパースターズ		Mario Party Superstars
+メトロイド ドレッド		Metroid Dread
+おすそわける メイド イン ワリオ		WarioWare: Get It Together!
+ナビつき！ つくってわかる はじめてゲームプログラミング		Game Builder Garage
+ゼルダの伝説 スカイウォードソード HD		The Legend of Zelda: Skyward Sword HD
+マリオゴルフ スーパーラッシュ		Mario Golf: Super Rush
+ミートピア		Miitopia
+ファミコン探偵倶楽部 消えた後継者		Famicom Detective Club: The Missing Heir & Famicom Detective Club: The Girl Who Stands Behind
+ファミコン探偵倶楽部 うしろに立つ少女		
+バディミッション BOND		
+スーパーマリオ 3Dワールド + フューリーワールド		Super Mario 3D World + Bowser's Fury
+『あつまれ どうぶつの森』島ごと引越しサービス		
+はたらくUFO		Part Time UFO
+マリオカート ライブ ホームサーキット		Mario Kart Live: Home Circuit
+ピクミン3 デラックス		Pikmin 3 Deluxe
+カービィファイターズ2		Kirby Fighters 2
+ペーパーマリオ オリガミキング		Paper Mario: The Origami King
+ジャンプロープ チャレンジ		Jump Rope Challenge
+世界のアソビ大全51		51 Worldwide Games
+Xenoblade Definitive Edition		Xenoblade Chronicles: Definitive Edition
+Good Job!		Good Job!
+あつまれ どうぶつの森		Animal Crossing: New Horizons
+東北大学加齢医学研究所 川島隆太教授監修 脳を鍛える大人のNintendo Switchトレーニング		Dr Kawashima’s Brain Training for Nintendo Switch
+幻影異聞録♯FE Encore		Tokyo Mirage Sessions ♯FE Encore
+スーパーファミコン Nintendo Classics		Super Nintendo Entertainment System – Nintendo Classics
+マリオ＋ラビッツ キングダムバトル	瑪利歐 + 瘋狂兔子 王國之戰|瑪利歐 + 瘋狂兔子 王國之戰 (日中版)	
+カラオケJOYSOUND for Nintendo Switch		
+いっしょにチョキッと スニッパーズ プラス	你裁我剪！斯尼帕 Plus|你裁我剪！斯尼帕Plus	
+いっしょにチョキッと スニッパーズ		Snipperclips – Cut it out, together!
+NINTENDO 64 Nintendo Classics 18+		
+BAYONETTA (ベヨネッタ)		Bayonetta
+Petal Runner		
+進撃の巨人３		
+007 ファーストライト - デラックスエディション		
+野球格闘リーグマン Bases Loaded		
+世界のテーブルゲーム＆遊びコレクション60+		
+大悪逆令嬢 ストラテジーオブリリィ		
+Hela：ちいさなねずみと魔法の森		
+スパイダー：エージェント8		
+Armatus		
+クロスランド せいれいたちとつむぐせかい		
+Look Outside		
+天空の世界シェルテーラ Nintendo Switch 2 Edition		
+テーブルゲームワールド CCFOLIA for Nintendo Switch 2		
+TANUKI: Pon's Summer - タヌキ：ポンの夏		
+RACCOIN: Chaos Max Edition		
+Avatar Legends: The Fighting Game		
+Beyond the Dark: ナイトウォッチ フレンドパス		
+Godzilla: Destroy All Monsters Melee Remastered		
+すみっコぐらし　ぽかぽか温泉にようこそ		
+Sword of the Sea		
+One Turn Kill		
+Order of the Sinking Star		
+コンソールアーカイブス マールじゃん!!		
+RV There Yet?		
+Darkest Dungeon II - Nintendo Switch 2 Edition		
+シュレディンガーズ・コール		
+鬼滅の刃 ヒノカミ血風譚2 Nintendo Switch 2 Edition		
+都市伝説解体センター Nintendo Switch 2 Edition		
+アーケードアーカイブス2 スイマー		
+Supermarket Simulator		
+Faraway		
+It Takes Two		
+Industria (インダストリアー)		
+トロイメライの月あかり Nintendo Switch 2 Edition		
+ワルツとジャム		
+Cult of the Lamb – Nintendo Switch 2 Edition		
+PEAK		
+ペルソナ４ リバイバル		
+BURGGEIST for Nintendo Switch 2		
+Fangtopia 幽玄ユートピア		
+Beyond the Dark: ナイトウォッチ		
+Reel Fishing®: Days of Summer - Nintendo Switch 2 Edition		
+アーケードアーカイブス2 エースドライバー・ビクトリーラップ		
+コンソールアーカイブス 雷電プロジェクト		
+光るだけしかない機械		
+サルファー		
+Frog Sqwad		
+ムーミン：ムーミン谷の夏まつり		
+ぷちホロの村 - 剣とお店と田舎暮らし		
+ヒューマン フォール フラット Nintendo Switch 2 Edition		
+蒼き雷霆（アームドブルー） ガンヴォルト トライアングル エディション Nintendo Switch 2 Edition		
+私のフレンドリーなご近所さん (My Friendly Neighborhood)		
+ETERNAL ANIMA（エターナルアニマ）		
+「It Takes Two」 - フレンドパス		
+ゼルダ無双 厄災の黙示録 DX		
+Queen's Domain		
+ロマンシング サガ3 デスティニーユナイテッド		
+遊戯王 TAG FORCE GX		
+トゥームレイダー：レガシー・オブ・アトランティス		Tomb Raider: Legacy of Atlantis
+SNØ: Ultimate Freeriding		
+Cities: Skylines - Expanded Edition		
+Minecraft		Minecraft
+Colorbound – Nintendo Switch 2 Edition		
+アーケードアーカイブス2 特殊部隊U.A.G.		
+MODEL Debut3 #nicola/モデルデビュー3 ニコラ		
+Echo Weaver		
+コンソールアーカイブス ザ・ドラッグストア		
+Deep Rock Galactic: Survivor - Nintendo Switch 2 Edition		
+アーケードアーカイブス2 スティンガー		
+ステラーコード		
+Fit Boxing 刀剣乱舞 -出陣！えくささいず本丸-		
+スーパーダンガンロンパ２×２		
+アストラルアセント (Astral Ascent) - Nintendo Switch 2 Edition		
+ザ クルー：モーターフェス		
+レイトン教授と蒸気の新世界		
+モンスターハンターワイルズ		Monster Hunter Wilds
+バトルスピリッツ クロスオーバー		
+どこかで見た“あのゲー”ムたちをもっと激しく作ってみたけれど、棒人間には限界があった件。		
+どこかで見た“あのゲー”ムたちを棒人間でつくってみたけれど、果たしてあなたはクリアできるのか？2		
+どこかで見た“あのゲー”ムたちを棒人間で作ってみたけれど、果たしてあなたはクリアできるのか？		
+創作ハンバーガー堂 – Nintendo Switch 2 Edition		
+Silver Pines		
+Heartworm		
+コンソールアーカイブス リップルアイランド		
+Chivalware		
+クライムライト／CRYMELIGHT		
+ブルーイのハッピースナップ		Bluey's Happy Snaps
+DESOLUS		
+Mirth Island		
+Witchbrook（ウィッチブルック）		
+Forever Ago		
+The Relic: First Guardian		
+デッキオブハウント		
+Jenny LeClue - Detectivu (名探偵ジェニー・ルクルー)		
+ぼくと釣り日記		
+マモンキング For Nintendo Switch 2		
+Marvel's Guardians of the Galaxy: Encore Edition		
+アーケードアーカイブス2 クレイジーバルーン		
+アーケードアーカイブス2 バルーンボンバー		
+ファウンテンズ (FOUNTAINS) Nintendo Switch 2 Edition		
+コンソールアーカイブス ちゃっくんぽっぷ		
+アルファディアⅠ＆Ⅱ Nintendo Switch 2 Edition		
+フェーダ The Emblem of Justice		
+トリネア		
+ソングマスター		
+BloodRush: Undying Wish		
+House Flipper 2 (ハウスフリッパー２)		
+Feed The Deep		
+餓狼伝説 City of the Wolves STANDARD EDITION		
+Fortune Avenue		
+MagicalCharming!		
+楽園追放 -The Stellar Angel-		
+MIX DUNK -KING OF BASKETBALL-		
+カスケード		
+ぎゅわんぶらあ自己中心派ドランプ帝国をわからせろ！		
+The Thaumaturge		
+Dicevaders		
+ワンス・アポン・ア・塊魂		
+天空の世界シェルテーラ		
+打倒東京にはJimotoism		
+Zombuffoonery		
+うたの☆プリンスさまっ♪ Shining Live  for Nintendo Switch		
+Gloomgrave グルームグラーブ		
+The Lost Pit		
+夜勤事件		
+アーケードアーカイブス2 ゼビウス3D/G		
+コンソールアーカイブス カラテ・チャンプ		
+猫 vs ネット：ミーム大戦 ボーイズ (Cats vs Internet: Rise of the Memes Boys)		
+UKKARIANS ウッカリアンズ		
+ウチのペット事情		
+キューピークロウ		
+ウチのペット事情 Vol.2		
+猫 vs ネット：ミーム大戦 ガールズ (Cats vs Internet: Rise of the Memes Girls)		
+怪獣ガールズ：モンスターを捕まえて恋に落ちろ (Kaiju Girls: Trap Giant Monsters & Fall in Love)		
+怪獣ボーイズ：モンスターを捕まえて恋に落ちろ (Kaiju Boys: Trap Giant Monsters & Fall in Love)		
+雑音系少年少女		
+Ratatan		
+The Dark Queen of Mortholme		
+a pet shop after dark		
+夢幻桜楼閣		
+Lilac ~side Wizard~		
+Puppet of Pain		
+ヒミツのこねこ～美少女アイテム探し～		
+くるくるカノジョ！ ～ウォーターパークで秘密のデート～		
+真相がわかると怖い漫画 〜ゾッとするホラーミステリー謎解きゲーム〜		
+バナナを探せ！〜美少女脳トレゲーム〜		
+回路パズル ー配線をつなげる脳トレー		
+ALIEN CAT 2		
+メロメロ！異世界モンタージュパズル ～聖女から魔物娘まで～		
+気軽に謎解き：1分探偵ミステリー		
+竜騎士の迷宮 リメイク		
+Lilac ~side Witch~		
+美女コーデチェック 今日の服装これで正解？		
+あそんでおぼえる はじめての英語		
+意味がわかると不気味なマンガ 〜ーゾッとする意味怖謎解き都市伝説怪談ゲームー〜		
+EGGコンソール は〜りぃふぉっくす MSXスペシャル MSX		
+シティロードパズル ～街の道をつなげる脳トレ～		
+あそんでおぼえる はじめての韓国語		
+両面反転パズル		
+Guided Meditations - Calm Mind		
+試験管ウォーターソートクイズ〜最小何手で色をそろえられる？〜		
+黒髪美女とサマーバカンス間違い探し		
+Primary School – English Grade 2		
+ソーラーオーエーシストレジャーズ		
+にゃんにゃん にゃん球		
+ギャルと南国バカンス 常夏の思い出		
+トーエム2		
+Full Metal Sergeant 2		
+ALICE＝ALICE ＆ BAD MEDICINE 2in1 PACK for Nintendo Switch		
+深層のチャロアイト		
+Ad Aquilonem - セトとすごす100日間 -		
+Sp(L/R)ite: スプライト		
+ホラー・ラブ ～ (Horror Love)		
+ウィジャ (Ouija)		
+ウォーファイター		
+ヤンデレ女ストーカーの執着		
+Mouthwashing		
+White Box Quiz		
+Hundred Fires: OPEN VECTOR -Episode 1-		
+ラブラブミステリークラブ		
+異世界プリンセス モンスターシージ		
+四血の学園 (Four Bloods Academy)		
+ピザ屋での5夜 2		
+ワイルドブルースカイズ		
+Derby.io		
+SUPER ARROW SHOT		
+カボチャ灯の共犯者		
+バオバオのほっこりクリーニングサービス		
+アーケードアーカイブス 原始島		
+Isle of Reveries		
+スクールボイ・エスケープ・トゥー・グラニー・ハウス		
+Parking Quest		

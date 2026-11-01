@@ -1,4 +1,5 @@
 import { productKey, type TitleAlias } from '@eshop-tracker/shared';
+import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { EshopError } from './errors.js';
 import { requestJson, type FetchLike } from './upstream-json.js';
@@ -79,4 +80,29 @@ export async function fetchTitleAliases(fetch: FetchLike = globalThis.fetch, sig
     fetchChineseTitleAliases(fetch, signal)
   ]);
   return [...english, ...chinese];
+}
+
+const MANUAL_ALIASES_FILE = new URL('../title-aliases.tsv', import.meta.url);
+
+/**
+ * Reads the hand-kept table of other-language names: one row per exact JP title, then Chinese and
+ * English names, several separated by `|`. Keyed by title, not game code, because some Switch 2
+ * Editions reuse another game's code. Throws with the line number on a malformed row.
+ */
+export function parseManualTitleAliases(text: string): Map<string, string[]> {
+  const names = new Map<string, string[]>();
+  text.split(/\r?\n/).forEach((line, index) => {
+    if (line.trim() === '' || line.startsWith('#')) return;
+    const cells = line.split('\t');
+    const title = cells[0]?.trim() ?? '';
+    if (cells.length > 3 || title === '') throw new Error(`title-aliases.tsv line ${index + 1}: expected "JP title<TAB>Chinese<TAB>English"`);
+    if (names.has(title)) throw new Error(`title-aliases.tsv line ${index + 1}: "${title}" is listed twice`);
+    const aliases = cells.slice(1).flatMap((cell) => cell.split('|')).map((name) => name.trim()).filter((name) => name !== '');
+    if (aliases.length > 0) names.set(title, aliases);
+  });
+  return names;
+}
+
+export async function loadManualTitleAliases(): Promise<Map<string, string[]>> {
+  return parseManualTitleAliases(await readFile(MANUAL_ALIASES_FILE, 'utf8'));
 }

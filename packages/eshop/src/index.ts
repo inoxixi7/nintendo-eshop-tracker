@@ -5,4 +5,4 @@ export { createJapanEshopAdapter } from './japan/adapter.js';
 export type { JapanEshopAdapterOptions } from './japan/adapter.js';
 export type { PriceFetchResult } from './price-fetch-result.js';
 export { validateCatalogBatch, validatePriceBatch } from './validate-batch.js';
-export { fetchTitleAliases } from './title-aliases.js';
+export { fetchTitleAliases, loadManualTitleAliases } from './title-aliases.js';
