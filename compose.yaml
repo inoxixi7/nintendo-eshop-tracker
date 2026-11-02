@@ -50,8 +50,8 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      # readiness waits for the startup sync (~8 min for JP); matches g3-bootstrap's 900 s wait
-      start_period: 15m
+      # readiness waits for the startup sync of every region (~35 min for JP, US, GB); matches g3-bootstrap's 2700 s wait
+      start_period: 45m
 
   api:
     <<: *default-logging

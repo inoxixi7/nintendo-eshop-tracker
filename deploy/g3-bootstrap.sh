@@ -19,7 +19,7 @@ sh deploy/test/integration.sh
 
 printf '%s\n' 'G3 bootstrap: validating and starting the private production stack'
 sh deploy/test/compose-config.sh .env
-docker compose up -d --build --wait --wait-timeout 900
+docker compose up -d --build --wait --wait-timeout 2700
 
 sql_true() {
   label=$1
