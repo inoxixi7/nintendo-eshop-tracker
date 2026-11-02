@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue';
 
 /** Stores the API serves; the choice is remembered per device. */
-export const REGIONS = ['JP', 'US'] as const;
+export const REGIONS = ['JP', 'US', 'GB'] as const;
 export type Region = (typeof REGIONS)[number];
 
 const STORAGE_KEY = 'eshop-tracker:region';

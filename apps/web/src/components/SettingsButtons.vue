@@ -20,7 +20,7 @@ async function toggleMenu() {
   menu.value?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
 }
 
-// two stores so far, so a tap flips between them
+// a few stores, so a tap steps to the next one
 function nextRegion() {
   region.value = REGIONS[(REGIONS.indexOf(region.value) + 1) % REGIONS.length]!;
 }

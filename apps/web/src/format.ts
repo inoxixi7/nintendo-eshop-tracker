@@ -2,7 +2,7 @@ import type { Price } from './api';
 import { intlLocale, t } from './i18n';
 
 // Each currency in its home style (¥7,980, $59.99) whatever the interface language.
-const CURRENCY_LOCALE: Record<string, string> = { JPY: 'ja-JP', USD: 'en-US' };
+const CURRENCY_LOCALE: Record<string, string> = { JPY: 'ja-JP', USD: 'en-US', GBP: 'en-GB' };
 
 export function formatPrice(amountMinor: number, currency: string): string {
   if (amountMinor === 0) return t('price.free');

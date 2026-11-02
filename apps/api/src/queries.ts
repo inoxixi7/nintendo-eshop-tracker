@@ -4,7 +4,7 @@ import { searchTokens } from '@eshop-tracker/shared';
 export type Platform = 'switch' | 'switch2';
 
 /** Stores the worker syncs. */
-export const COUNTRIES = ['JP', 'US'] as const;
+export const COUNTRIES = ['JP', 'US', 'GB'] as const;
 export type Country = (typeof COUNTRIES)[number];
 export type ProductType = 'game' | 'bundle' | 'dlc' | 'unknown';
 
@@ -154,13 +154,16 @@ export async function listListings(
   if (filters.q !== undefined) {
     const tokens = searchTokens(filters.q);
     if (tokens.length === 0) where.push('FALSE');
-    // Each word must hit the listing's own title or a same-game title in another language. JP listings join
-    // aliases by game code; US listings have none, so they join through the game's English name, found
-    // from a Chinese alias, from a JP listing's code, or among a JP listing's hand-kept names (one per line).
+    // Each word must hit the listing's own title or a same-game title in another language. JP and GB listings
+    // join aliases and JP titles (with their hand-kept names) by game code; US listings have none, so they join
+    // through the game's English name, found from a Chinese alias, from a JP listing's code, or among a JP
+    // listing's hand-kept names (one per line).
     for (const token of tokens) {
       const pattern = bind(`%${escapeLike(token)}%`);
       where.push(`(l.title_norm LIKE ${pattern}
         OR (l.platform, left(l.product_code, 4)) IN (SELECT platform, product_core FROM title_aliases WHERE title_norm LIKE ${pattern})
+        OR (l.country <> 'JP' AND (l.platform, left(l.product_code, 4)) IN (
+          SELECT jp.platform, left(jp.product_code, 4) FROM regional_listings jp WHERE jp.country = 'JP' AND jp.title_norm LIKE ${pattern}))
         OR (l.product_code IS NULL AND (l.platform, l.title_norm) IN (
           SELECT en.platform, en.title_norm FROM title_aliases hit
           JOIN title_aliases en ON en.platform = hit.platform AND en.product_core = hit.product_core AND en.language = 'en'
@@ -197,7 +200,7 @@ export async function listListings(
   };
 }
 
-// shortcut: reads each store's own payload shape (JP iurl/sslurl hashes, US productGallery); map at sync if a third region arrives
+// shortcut: reads each store's own payload shape (JP iurl/sslurl hashes, US productGallery, GB's one wide image); map at sync if another region arrives
 function imageUrl(value: unknown): string | null {
   if (typeof value === 'object' && value !== null) {
     // US gallery entry; videos are skipped
@@ -215,7 +218,7 @@ export async function getListing(db: QueryClient, id: string, now = new Date()):
   const result = await db.query(
     `SELECT ${LISTING_COLUMNS}, l.product_code, l.description, l.last_seen_at,
        CASE WHEN jsonb_typeof(l.source_payload->'genre') = 'array' THEN l.source_payload->'genre' END AS genres,
-       l.source_payload->'iurl' AS hero_image, COALESCE(l.source_payload->'sslurl', l.source_payload->'productGallery') AS screenshots
+       COALESCE(l.source_payload->'iurl', l.source_payload->'image_url_h2x1_s') AS hero_image, COALESCE(l.source_payload->'sslurl', l.source_payload->'productGallery') AS screenshots
      FROM regional_listings l LEFT JOIN current_prices p ON p.regional_listing_id = l.id
      WHERE l.id = $1`,
     [id]

@@ -105,6 +105,8 @@ describe('GET /v1/listings', () => {
 
     expect(calls[0]?.values.slice(1, 3)).toEqual(['%萨尔达%', '%50off%']);
     expect(calls[0]?.sql).toMatch(/l\.title_norm LIKE \$2\s+OR \(l\.platform, left\(l\.product_code, 4\)\) IN \(SELECT platform, product_core FROM title_aliases WHERE title_norm LIKE \$2\)/);
+    // coded GB listings reach JP titles by game code
+    expect(calls[0]?.sql).toMatch(/l\.country <> 'JP' AND \(l\.platform, left\(l\.product_code, 4\)\) IN \(\s*SELECT jp\.platform, left\(jp\.product_code, 4\) FROM regional_listings jp WHERE jp\.country = 'JP' AND jp\.title_norm LIKE \$2\)/);
     // code-less US listings reach the alias through the same game's English name
     expect(calls[0]?.sql).toMatch(/l\.product_code IS NULL AND \(l\.platform, l\.title_norm\) IN \(\s*SELECT en\.platform, en\.title_norm[\s\S]*en\.language = 'en'\s+WHERE hit\.title_norm LIKE \$2/);
   });
@@ -161,7 +163,7 @@ describe('GET /v1/deals', () => {
 
     expect(calls[1]?.sql).toContain('l.country = $1');
     expect(calls[1]?.values[0]).toBe('US');
-    expect((await buildApp(db).inject('/v1/deals?country=GB')).statusCode).toBe(400);
+    expect((await buildApp(db).inject('/v1/deals?country=HK')).statusCode).toBe(400);
   });
 });
 
@@ -255,7 +257,8 @@ describe('GET /v1/health and errors', () => {
       database: 'ok',
       lastSuccessfulSync: {
         JP: { catalog: RECENT.toISOString(), prices: RECENT.toISOString(), stale: false },
-        US: { catalog: null, prices: null, stale: true }
+        US: { catalog: null, prices: null, stale: true },
+        GB: { catalog: null, prices: null, stale: true }
       },
       stale: true
     });

@@ -1,4 +1,4 @@
-import { createJapanEshopAdapter, createUsEshopAdapter, fetchTitleAliases, loadManualTitleAliases } from '@eshop-tracker/eshop';
+import { createGbEshopAdapter, createJapanEshopAdapter, createUsEshopAdapter, fetchTitleAliases, loadManualTitleAliases } from '@eshop-tracker/eshop';
 import { createTrackerRepository, type TrackerRepository } from '@eshop-tracker/database';
 import { pathToFileURL } from 'node:url';
 import { parseWorkerConfig } from './config.js';
@@ -70,7 +70,8 @@ function defaultRegions(): readonly RegionSync[] {
       fetchTitleAliases: (signal) => fetchTitleAliases(globalThis.fetch, signal),
       loadSearchNames: loadManualTitleAliases
     },
-    { adapter: createUsEshopAdapter(), listingSource: 'nintendo-us-algolia', priceSource: PRICE_SOURCE }
+    { adapter: createUsEshopAdapter(), listingSource: 'nintendo-us-algolia', priceSource: PRICE_SOURCE },
+    { adapter: createGbEshopAdapter(), listingSource: 'nintendo-eu-search', priceSource: PRICE_SOURCE }
   ];
 }
 

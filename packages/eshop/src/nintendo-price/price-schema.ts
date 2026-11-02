@@ -28,7 +28,8 @@ const AvailablePriceSchema = z.object({
   discount_price: DiscountMoneySchema.optional()
 }).loose();
 
-// Unreleased or terminated titles may carry no price; delisted (not_found) titles may keep their last price. All are unpriced.
+// Unreleased or terminated titles may carry no price; delisted (not_found) titles may keep their last price and
+// even its sale (seen in the UK store). All are unpriced.
 const UnavailablePriceSchema = z.union([
   z.object({
     title_id: TitleIdSchema,
@@ -40,7 +41,7 @@ const UnavailablePriceSchema = z.union([
     title_id: TitleIdSchema,
     sales_status: z.literal('not_found'),
     regular_price: MoneySchema,
-    discount_price: z.never().optional()
+    discount_price: DiscountMoneySchema.optional()
   }).loose()
 ]);
 

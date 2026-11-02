@@ -241,6 +241,7 @@ describe('createJapanEshopAdapter', () => {
 it('keeps the root runtime surface minimal and stable', () => {
   expect(Object.keys(eshop).sort()).toEqual([
     'EshopError',
+    'createGbEshopAdapter',
     'createJapanEshopAdapter',
     'createUsEshopAdapter',
     'fetchTitleAliases',

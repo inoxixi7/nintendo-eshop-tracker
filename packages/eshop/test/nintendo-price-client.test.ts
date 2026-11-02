@@ -277,6 +277,20 @@ describe('NintendoPriceClient reconciliation and normalization', () => {
     ].sort()).toEqual([...sourceIds].sort());
   });
 
+  it('treats a delisted title as unpriced even when it still carries a sale', async () => {
+    const { client } = clientForPayload(priceResponse([{
+      title_id: Number(sourceId(1)),
+      sales_status: 'not_found',
+      regular_price: money('1199'),
+      discount_price: money('299', { start_datetime: '2026-10-29T00:00:00Z', end_datetime: '2026-11-11T23:59:59Z' })
+    }]));
+
+    const result = await client.fetchPrices([sourceId(1)]);
+
+    expect(result.observations).toEqual([]);
+    expect(result.unavailableSourceIds).toEqual([sourceId(1)]);
+  });
+
   it('rejects an unexpected upstream source ID with a stable cause', async () => {
     const requested = sourceId(1);
     const { client } = clientForPayload(priceResponse([availablePrice(sourceId(2))]));
