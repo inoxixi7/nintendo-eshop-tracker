@@ -93,8 +93,9 @@ assert_sql() {
 assert_sql 'JP catalog is nonempty' "SELECT count(*) > 0 FROM regional_listings WHERE country = 'JP'"
 assert_sql 'current prices are nonempty' 'SELECT count(*) > 0 FROM current_prices'
 assert_sql 'price history is nonempty' 'SELECT count(*) > 0 FROM price_history'
-assert_sql 'exactly two successful or partial sync runs exist' "SELECT count(*) = 2 FROM sync_runs WHERE status IN ('success', 'partial')"
-assert_sql 'only the catalog and price sync runs exist' 'SELECT count(*) = 2 FROM sync_runs'
+# One catalog and one price run for each of JP, US, GB, CA, MX, BR
+assert_sql 'each region has one successful or partial catalog and price run' "SELECT count(*) = 12 AND count(DISTINCT (country, job_type)) = 12 FROM sync_runs WHERE status IN ('success', 'partial')"
+assert_sql 'only the catalog and price sync runs exist' 'SELECT count(*) = 12 FROM sync_runs'
 
 compose run --rm --no-deps backup sh /usr/local/bin/run-backup.sh once
 archive=$(find "$backup_dir" -maxdepth 1 -type f -name 'nintendo_eshop_*.sql.gz' -print -quit)
