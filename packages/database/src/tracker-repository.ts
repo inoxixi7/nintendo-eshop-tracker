@@ -42,8 +42,10 @@ const schemaMigrationsBootstrapSql = `
   )
 `;
 
+const COUNTRY_LOCK_IDS = { JP: 1, US: 2, GB: 3, CA: 4, MX: 5, BR: 6 } satisfies Record<CountryCode, number>;
+
 function countryLockId(country: CountryCode): number {
-  return { JP: 1, US: 2, GB: 3 }[country];
+  return COUNTRY_LOCK_IDS[country];
 }
 
 function jobLockId(jobType: JobType, country: CountryCode): number {
@@ -591,12 +593,12 @@ class PostgresTrackerRepository implements TrackerRepository {
       this.heldJobLocks.clear();
       for (const [key, client] of heldLocks) {
         const [jobType, country] = key.split(':');
-        if ((jobType !== 'catalog' && jobType !== 'prices') || (country !== 'JP' && country !== 'US' && country !== 'GB')) {
+        if ((jobType !== 'catalog' && jobType !== 'prices') || country === undefined || !Object.hasOwn(COUNTRY_LOCK_IDS, country)) {
           const cleanupError = await releaseClient(client, new Error('Invalid held job lock'));
           firstError ??= cleanupError;
           continue;
         }
-        const cleanupError = await unlockAndRelease(client, JOB_LOCK_NAMESPACE, jobLockId(jobType, country));
+        const cleanupError = await unlockAndRelease(client, JOB_LOCK_NAMESPACE, jobLockId(jobType, country as CountryCode));
         firstError ??= cleanupError;
       }
       try {

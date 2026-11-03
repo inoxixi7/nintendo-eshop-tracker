@@ -258,7 +258,10 @@ describe('GET /v1/health and errors', () => {
       lastSuccessfulSync: {
         JP: { catalog: RECENT.toISOString(), prices: RECENT.toISOString(), stale: false },
         US: { catalog: null, prices: null, stale: true },
-        GB: { catalog: null, prices: null, stale: true }
+        GB: { catalog: null, prices: null, stale: true },
+        CA: { catalog: null, prices: null, stale: true },
+        MX: { catalog: null, prices: null, stale: true },
+        BR: { catalog: null, prices: null, stale: true }
       },
       stale: true
     });

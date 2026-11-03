@@ -35,9 +35,13 @@ function nullableText(value: string | null | undefined): string | null {
   return trimmed === undefined || trimmed.length === 0 ? null : trimmed;
 }
 
+/** Stores served from nintendo.com's storefront, which share title IDs. */
+export type AmericasCountry = 'US' | 'CA' | 'MX' | 'BR';
+
 function productType(hit: UsCatalogHit): ProductType {
   if (hit.dlcType === 'Individual') return 'dlc';
-  if (hit.dlcType === 'Bundle' || hit.dlcType === 'ROM Bundle') return 'bundle';
+  // every other DLC type is a bundle, its name translated per store ("Bundle", "Paquete", "Pacote", "ROM Bundle")
+  if (nullableText(hit.dlcType) !== null) return 'bundle';
   const type = hit.eshopDetails?.productType;
   if (type === 'TITLE') return 'game';
   if (type === 'ADD_ON_CONTENT') return 'dlc';
@@ -53,7 +57,7 @@ function imageUrl(hit: UsCatalogHit): string | null {
 }
 
 /** Returns null for records the price API cannot price or the tracker does not cover (mobile). */
-export function normalizeUsCatalogItem(hit: UsCatalogHit): CatalogItem | null {
+export function normalizeUsCatalogItem(hit: UsCatalogHit, country: AmericasCountry = 'US'): CatalogItem | null {
   const nsuid = nullableText(hit.nsuid);
   const platform = PLATFORMS[hit.platform ?? ''];
   const title = nullableText(hit.title);
@@ -65,7 +69,7 @@ export function normalizeUsCatalogItem(hit: UsCatalogHit): CatalogItem | null {
   const genres = [...new Set((hit.gameGenres ?? []).map((genre) => GENRES[genre.code] ?? 'その他'))];
 
   return CatalogItemSchema.parse({
-    country: 'US',
+    country,
     source: 'nintendo-us-algolia',
     sourceId: nsuid,
     productCode: null,

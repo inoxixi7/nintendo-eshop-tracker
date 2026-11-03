@@ -40,9 +40,17 @@ describe('normalizeUsCatalogItem', () => {
     });
   });
 
-  it('classifies add-ons and bundles', () => {
+  it('classifies add-ons and bundles, whatever language the store names them in', () => {
     expect(normalizeUsCatalogItem(hit(1, { dlcType: 'Individual' }))?.productType).toBe('dlc');
     expect(normalizeUsCatalogItem(hit(1, { dlcType: 'ROM Bundle' }))?.productType).toBe('bundle');
+    expect(normalizeUsCatalogItem(hit(1, { dlcType: 'Paquete' }), 'MX')?.productType).toBe('bundle');
+  });
+
+  it('labels Canadian, Mexican and Brazilian records with their own store', () => {
+    expect(normalizeUsCatalogItem(hit(1, { url: '/pt-br/store/products/game-1-switch/' }), 'BR')).toMatchObject({
+      country: 'BR',
+      sourceUrl: 'https://www.nintendo.com/pt-br/store/products/game-1-switch/'
+    });
   });
 
   it('skips records the tracker cannot price or does not cover', () => {
@@ -102,5 +110,16 @@ describe('UsCatalogClient', () => {
     });
 
     await expect(new UsCatalogClient({ fetch }).fetchAll()).rejects.toMatchObject({ code: 'INVALID_PAYLOAD', country: 'US' });
+  });
+});
+
+describe('UsCatalogClient for other nintendo.com stores', () => {
+  it('reads the store\'s own index', async () => {
+    const fetch = algolia([hit(1)]);
+
+    const items = await new UsCatalogClient({ fetch, country: 'MX' }).fetchAll();
+
+    expect(new URL(String(fetch.mock.calls[0]?.[0])).pathname).toBe('/1/indexes/store_game_es_mx');
+    expect(items[0]?.country).toBe('MX');
   });
 });

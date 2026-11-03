@@ -1,37 +1,44 @@
 import type { CatalogItem } from '@eshop-tracker/shared';
+import type { AmericasCountry } from './normalize-catalog-item.js';
 import { EshopError } from '../errors.js';
 import { requestJson, type FetchLike } from '../upstream-json.js';
 import { validateCatalogBatch } from '../validate-batch.js';
 import { UsCatalogPageSchema, type UsCatalogHit, type UsCatalogPage } from './catalog-schema.js';
 import { normalizeUsCatalogItem } from './normalize-catalog-item.js';
 
-// nintendo.com's own storefront search; the key is the public search-only key its pages ship with.
-const SEARCH_URL = 'https://U3B6GR4UA3-dsn.algolia.net/1/indexes/store_game_en_us';
+// nintendo.com's own storefront search, one index per store; the key is the public search-only key its pages ship with.
+const INDEXES = { US: 'store_game_en_us', CA: 'store_game_en_ca', MX: 'store_game_es_mx', BR: 'store_game_pt_br' } as const;
 const APP_ID = 'U3B6GR4UA3';
 const SEARCH_KEY = 'a29c6927638bfd8cee23993e51e721c9';
 const PAGE_SIZE = 500;
 // Algolia serves at most this many hits per query, so bigger sets are split into narrower filters.
 const REACHABLE_HITS = 1000;
 const SPLIT_FACETS = ['platform', 'contentRatingCode', 'dlcType', 'availability'] as const;
-const MAX_PRICE_CENTS = 100_000;
+// in minor units of the store's currency; Mexican and Brazilian prices run into the thousands
+const MAX_PRICE_CENTS = 10_000_000;
 // Hits lost to the price split (records without a price inside a still-too-big bucket) stay below this share.
 const MIN_COVERAGE = 0.95;
 
 interface UsCatalogClientOptions {
   fetch: FetchLike;
+  country?: AmericasCountry;
 }
 
-function invalidPayload(cause: unknown): EshopError {
-  return new EshopError({ code: 'INVALID_PAYLOAD', message: 'Nintendo US catalog payload is invalid', country: 'US', cause });
+function invalidPayload(cause: unknown, country: AmericasCountry): EshopError {
+  return new EshopError({ code: 'INVALID_PAYLOAD', message: `Nintendo ${country} catalog payload is invalid`, country, cause });
 }
 
 const quote = (value: string) => `"${value.replace(/["\\]/g, (character) => `\\${character}`)}"`;
 
 export class UsCatalogClient {
-  constructor(private readonly options: UsCatalogClientOptions) {}
+  private readonly country: AmericasCountry;
+
+  constructor(private readonly options: UsCatalogClientOptions) {
+    this.country = options.country ?? 'US';
+  }
 
   async query(filters: readonly string[], page: number, facet?: string, signal?: AbortSignal): Promise<UsCatalogPage> {
-    const url = new URL(SEARCH_URL);
+    const url = new URL(`https://U3B6GR4UA3-dsn.algolia.net/1/indexes/${INDEXES[this.country]}`);
     url.searchParams.set('x-algolia-application-id', APP_ID);
     url.searchParams.set('x-algolia-api-key', SEARCH_KEY);
     url.searchParams.set('hitsPerPage', String(PAGE_SIZE));
@@ -40,11 +47,11 @@ export class UsCatalogClient {
     if (filters.length > 0) url.searchParams.set('filters', filters.join(' AND '));
     if (facet !== undefined) url.searchParams.set('facets', JSON.stringify([facet]));
 
-    const raw = await requestJson({ fetch: this.options.fetch, url, country: 'US', signal });
+    const raw = await requestJson({ fetch: this.options.fetch, url, country: this.country, signal });
     try {
       return UsCatalogPageSchema.parse(raw);
     } catch (cause) {
-      throw invalidPayload(cause);
+      throw invalidPayload(cause, this.country);
     }
   }
 
@@ -97,12 +104,12 @@ export class UsCatalogClient {
       if (hits.size < total * MIN_COVERAGE) throw new Error(`US catalog reached ${hits.size} of ${total} records`);
       const items = new Map<string, CatalogItem>();
       for (const hit of hits.values()) {
-        const item = normalizeUsCatalogItem(hit);
+        const item = normalizeUsCatalogItem(hit, this.country);
         if (item !== null && !items.has(item.sourceId)) items.set(item.sourceId, item);
       }
-      return validateCatalogBatch([...items.values()], 'US');
+      return validateCatalogBatch([...items.values()], this.country);
     } catch (cause) {
-      throw invalidPayload(cause);
+      throw invalidPayload(cause, this.country);
     }
   }
 }

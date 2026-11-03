@@ -454,3 +454,23 @@ describe('NintendoPriceClient for the US store', () => {
     await expect(client.fetchPrices([id])).rejects.toMatchObject({ code: 'INVALID_PAYLOAD', country: 'US' });
   });
 });
+
+describe('NintendoPriceClient for the Americas stores', () => {
+  it.each([
+    ['CA', 'en', 'CAD', '84.99', 8499],
+    ['MX', 'es', 'MXN', '1229', 122900],
+    ['BR', 'pt', 'BRL', '329.9', 32990]
+  ] as const)('asks the %s store in its language and keeps %s cents', async (country, lang, currency, raw, minor) => {
+    const id = sourceId(1);
+    const fetch = vi.fn<FetchLike>(async () => jsonResponse({
+      country,
+      prices: [availablePrice(id, { regular_price: { amount: raw, currency, raw_value: raw } })]
+    }));
+    const client = new NintendoPriceClient({ fetch, now: () => new Date(OBSERVED_AT), country });
+
+    const result = await client.fetchPrices([id]);
+
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(`https://api.ec.nintendo.com/v1/price?country=${country}&lang=${lang}&ids=${id}`);
+    expect(result.observations).toEqual([expect.objectContaining({ country, currency, regularAmountMinor: minor })]);
+  });
+});

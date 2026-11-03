@@ -71,7 +71,12 @@ function defaultRegions(): readonly RegionSync[] {
       loadSearchNames: loadManualTitleAliases
     },
     { adapter: createUsEshopAdapter(), listingSource: 'nintendo-us-algolia', priceSource: PRICE_SOURCE },
-    { adapter: createGbEshopAdapter(), listingSource: 'nintendo-eu-search', priceSource: PRICE_SOURCE }
+    { adapter: createGbEshopAdapter(), listingSource: 'nintendo-eu-search', priceSource: PRICE_SOURCE },
+    ...(['CA', 'MX', 'BR'] as const).map((country) => ({
+      adapter: createUsEshopAdapter({ country }),
+      listingSource: 'nintendo-us-algolia',
+      priceSource: PRICE_SOURCE
+    }))
   ];
 }
 

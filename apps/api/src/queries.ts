@@ -4,7 +4,7 @@ import { searchTokens } from '@eshop-tracker/shared';
 export type Platform = 'switch' | 'switch2';
 
 /** Stores the worker syncs. */
-export const COUNTRIES = ['JP', 'US', 'GB'] as const;
+export const COUNTRIES = ['JP', 'US', 'GB', 'CA', 'MX', 'BR'] as const;
 export type Country = (typeof COUNTRIES)[number];
 export type ProductType = 'game' | 'bundle' | 'dlc' | 'unknown';
 

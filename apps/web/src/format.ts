@@ -1,8 +1,8 @@
 import type { Price } from './api';
 import { intlLocale, t } from './i18n';
 
-// Each currency in its home style (¥7,980, $59.99) whatever the interface language.
-const CURRENCY_LOCALE: Record<string, string> = { JPY: 'ja-JP', USD: 'en-US', GBP: 'en-GB' };
+// Each currency in its home style (¥7,980, $59.99, R$ 329,90) whatever the interface language; Canadian and Mexican dollars keep their CA$ / MX$ prefix.
+const CURRENCY_LOCALE: Record<string, string> = { JPY: 'ja-JP', USD: 'en-US', GBP: 'en-GB', CAD: 'en-US', MXN: 'en-US', BRL: 'pt-BR' };
 
 export function formatPrice(amountMinor: number, currency: string): string {
   if (amountMinor === 0) return t('price.free');

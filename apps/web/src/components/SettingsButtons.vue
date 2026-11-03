@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { nextTick, onUnmounted, ref } from 'vue';
 import { locale, LOCALES, t, type Locale } from '../i18n';
-import { region, REGIONS } from '../region';
+import { region, REGIONS, type Region } from '../region';
 import { theme, toggleTheme } from '../theme';
 
-const open = ref(false);
+// which menu is showing; one at a time
+const open = ref<'lang' | 'region' | null>(null);
 const root = ref<HTMLElement | null>(null);
 const menu = ref<HTMLElement | null>(null);
 
@@ -12,21 +13,16 @@ function closeOnOutside(event: PointerEvent) {
   if (!root.value?.contains(event.target as Node)) close();
 }
 
-async function toggleMenu() {
-  open.value = !open.value;
-  if (!open.value) return close();
+async function toggleMenu(which: 'lang' | 'region') {
+  if (open.value === which) return close();
+  open.value = which;
   document.addEventListener('pointerdown', closeOnOutside);
   await nextTick();
   menu.value?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
 }
 
-// a few stores, so a tap steps to the next one
-function nextRegion() {
-  region.value = REGIONS[(REGIONS.indexOf(region.value) + 1) % REGIONS.length]!;
-}
-
 function close() {
-  open.value = false;
+  open.value = null;
   document.removeEventListener('pointerdown', closeOnOutside);
 }
 
@@ -36,15 +32,28 @@ function choose(code: Locale) {
   root.value?.querySelector<HTMLElement>('.lang')?.focus();
 }
 
+function chooseRegion(code: Region) {
+  region.value = code;
+  close();
+  root.value?.querySelector<HTMLElement>('.region')?.focus();
+}
+
 onUnmounted(close);
 </script>
 
 <template>
   <div ref="root" class="settings" @keydown.esc="close">
-    <button class="icon region" :aria-label="t('settings.region', { region: t(`region.${region}`) })" @click="nextRegion">
+    <button class="icon region" :aria-label="t('settings.region', { region: t(`region.${region}`) })"
+      :aria-expanded="open === 'region'" aria-haspopup="menu" @click="toggleMenu('region')">
       {{ t(`region.${region}`) }}
     </button>
-    <button class="icon lang" :aria-label="t('settings.language')" :aria-expanded="open" aria-haspopup="menu" @click="toggleMenu">
+    <div v-if="open === 'region'" ref="menu" class="menu region-menu" role="menu" :aria-label="t('settings.region', { region: t(`region.${region}`) })">
+      <button v-for="code in REGIONS" :key="code" role="menuitemradio" :aria-checked="region === code" @click="chooseRegion(code)">
+        <span>{{ t(`store.${code}`) }} <span class="code">{{ code }}</span></span>
+        <svg v-if="region === code" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg>
+      </button>
+    </div>
+    <button class="icon lang" :aria-label="t('settings.language')" :aria-expanded="open === 'lang'" aria-haspopup="menu" @click="toggleMenu('lang')">
       <!-- two speech bubbles, "A" and "文": "switch language" -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M3.5 1.5h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7l-3 2.5v-2.5h-.5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z" />
@@ -53,7 +62,7 @@ onUnmounted(close);
         <path d="M16.5 11v1M13.8 12.6h5.4M15.2 12.8c.5 2 1.8 3.4 3.8 4.3M17.8 12.8c-.5 2-1.8 3.4-3.8 4.3" />
       </svg>
     </button>
-    <div v-if="open" ref="menu" class="menu" role="menu" :aria-label="t('settings.language')">
+    <div v-if="open === 'lang'" ref="menu" class="menu" role="menu" :aria-label="t('settings.language')">
       <button v-for="option in LOCALES" :key="option.code" role="menuitemradio" :aria-checked="locale === option.code"
         :lang="option.code" @click="choose(option.code)">
         <span>{{ option.label }}</span>
@@ -117,6 +126,8 @@ onUnmounted(close);
   text-align: left;
 }
 
+.region-menu { right: 96px; }
+.menu .code { opacity: 0.55; font-size: 13px; margin-left: 4px; }
 .menu button:hover, .menu button:focus-visible { background: var(--surface-2); outline: none; }
 .menu button[aria-checked="true"] { font-weight: 700; color: var(--accent); }
 .menu svg { width: 18px; height: 18px; stroke-width: 2.4; }

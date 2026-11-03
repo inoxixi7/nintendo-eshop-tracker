@@ -3,7 +3,10 @@ import type { CurrencyCode } from '@eshop-tracker/shared';
 const scaleByCurrency = {
   JPY: 0,
   USD: 2,
-  GBP: 2
+  GBP: 2,
+  CAD: 2,
+  MXN: 2,
+  BRL: 2
 } satisfies Record<CurrencyCode, number>;
 const maxSafeIntegerDigits = String(Number.MAX_SAFE_INTEGER).length;
 const maxSafeMinorAmount = BigInt(Number.MAX_SAFE_INTEGER);

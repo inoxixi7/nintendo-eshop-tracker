@@ -44,6 +44,9 @@ describe('format', () => {
   it('formats yen as whole units and dollars from cents', () => {
     expect(formatPrice(3480, 'JPY')).toMatch(/^[¥￥]3,480$/);
     expect(formatPrice(5999, 'USD')).toBe('$59.99');
+    // other dollars carry their country so they never read as US dollars
+    expect(formatPrice(279, 'CAD')).toBe('CA$2.79');
+    expect(formatPrice(122900, 'MXN')).toBe('MX$1,229.00');
     expect(formatPrice(0, 'USD')).toBe('免费');
   });
 

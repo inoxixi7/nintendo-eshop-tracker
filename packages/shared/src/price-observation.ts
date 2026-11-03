@@ -31,7 +31,10 @@ const CountryCurrencyPairSchema = z.object({
 const currencyByCountry = {
   JP: 'JPY',
   US: 'USD',
-  GB: 'GBP'
+  GB: 'GBP',
+  CA: 'CAD',
+  MX: 'MXN',
+  BR: 'BRL'
 } as const;
 
 function toTimestamp(value: string): number | null {

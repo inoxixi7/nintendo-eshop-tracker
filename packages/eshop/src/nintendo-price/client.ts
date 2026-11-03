@@ -22,7 +22,10 @@ export interface NintendoPriceClientOptions {
 const STORES = {
   JP: { lang: 'ja', currency: 'JPY' },
   US: { lang: 'en', currency: 'USD' },
-  GB: { lang: 'en', currency: 'GBP' }
+  GB: { lang: 'en', currency: 'GBP' },
+  CA: { lang: 'en', currency: 'CAD' },
+  MX: { lang: 'es', currency: 'MXN' },
+  BR: { lang: 'pt', currency: 'BRL' }
 } satisfies Record<CountryCode, { lang: string; currency: CurrencyCode }>;
 
 const PRICE_URL = 'https://api.ec.nintendo.com/v1/price';

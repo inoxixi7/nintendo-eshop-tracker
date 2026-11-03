@@ -5,7 +5,7 @@ describe('database migrations', () => {
   it('loads the initial migration in lexical order with the tracker schema', async () => {
     const migrations = await loadMigrations();
 
-    expect(migrations.map(({ name }) => name)).toEqual(['001_initial.sql', '002_search.sql', '003_genre_index.sql']);
+    expect(migrations.map(({ name }) => name)).toEqual(['001_initial.sql', '002_search.sql', '003_genre_index.sql', '004_americas.sql']);
 
     const sql = migrations[0]?.sql ?? '';
     expect(sql).toMatch(/CREATE TABLE regional_listings/i);
